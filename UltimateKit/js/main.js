@@ -1978,36 +1978,80 @@
     }
 
     /* ------------------------------------------------------ auto captions */
-    /* the voice layer's file -> ElevenLabs Speech to Text (js/autocap.js) -> words with times, shown here to be
-       corrected -> Apply builds the caption rig (jsx/autocap.jsx): one text layer whose captions are its markers,
-       the spoken word by hold keys, a word box / caption box that follow by themselves. */
+    /* the voice layer's file (a big video: its sound, extracted by After Effects) -> ElevenLabs Speech to Text
+       (js/autocap.js) -> words with times, shown here to be corrected -> Apply builds the caption rig (jsx/autocap.jsx).
+       Styles: ready-made ones (UKAutoCap.PRESETS) and the user's own, kept in <userData>/UltimateKit/autocap/styles.json
+       ({ list: [{id, name, s}], drafts: {id: s} }: drafts = changed, not saved yet; ... menu = Duplicate / Save / Delete,
+       "Save all"). The API key is kept in .../autocap/key.txt, so every After Effects version finds it. The preview shows
+       the comp's own frame in the comp's own shape. */
     function pageAutoCap(cat) {
-        var st = state(cat.id, { lang: "ka", second: "en", model: "scribe_v2", terms: "", rules: "", maxWords: 4, maxChars: 22, punct: true, size: 6.5, posY: 72, color: "#FFFFFF", entrance: "none", shadow: true,
-            hl: true, hlColor: "#FFD60A", scale: 100, upcoming: 100, wbox: false, wboxColor: "#7C5CFF", wboxOp: 100, wboxRound: 30, box: false, boxColor: "#000000", boxOp: 60, boxRound: 30, words: null, src: null });
-        var cv = h("canvas", { class: "preview cine" }), player = new UKAutoCap.Player(cv);
+        var st = state(cat.id, { lang: "ka", second: "en", model: "scribe_v2", terms: "", rules: "", words: null, src: null, comp: null, sel: "ac1" });
+        var A = UKAutoCap, dir = fs ? userDir("autocap") : "", STY = dir + "/styles.json", KEYF = dir + "/key.txt";
+        var rd = function (p) { if (!fs) return ""; try { var r = fs.readFile(p); return r.err ? "" : String(r.data || ""); } catch (e) { return ""; } };
+        var wr = function (p, txt) { if (!fs) return true; try { return !fs.writeFile(p, txt).err; } catch (e) { return false; } };
+        /* ---- styles */
+        var lib = null;
+        try { lib = JSON.parse(fs ? (rd(STY) || "null") : JSON.stringify(STORE.acStyles || null)); } catch (e0) { lib = null; }
+        var seed = function () { return A.PRESETS.map(function (p) { return { id: p.id, name: p.name, s: A.style(p.s) }; }); };
+        if (!lib || !lib.list || !lib.list.length) lib = { list: seed(), drafts: {} };
+        lib.drafts = lib.drafts || {};
+        var saveT = 0, persist = function () {
+            clearTimeout(saveT);
+            saveT = setTimeout(function () { if (fs) { if (!wr(STY, JSON.stringify(lib))) status("Could not save the styles file", "err"); } else { STORE.acStyles = lib; save(); } }, 250);
+        };
+        var item = function (id) { for (var i = 0; i < lib.list.length; i++) if (lib.list[i].id === id) return lib.list[i]; return null; };
+        if (!item(st.sel)) st.sel = lib.list[0].id;
+        var cur = function () { return item(st.sel) || lib.list[0]; };
+        var styleOf = function (p) { return A.style(lib.drafts[p.id] || p.s); };
+        var cs = function () { return styleOf(cur()); };
+
+        var cv = h("canvas", { class: "preview cine" }), player = new A.Player(cv), bg = null;
         preview = player;
-        var upd = function () { save(); player.set(st); };
-        player.set(st); view.appendChild(cv);
-        var sel = function (opts, key, after) { var s = h("select", {}); opts.forEach(function (o) { s.appendChild(h("option", { value: o[0], text: o[1] })); }); s.value = st[key]; s.addEventListener("change", function () { st[key] = s.value; upd(); if (after) after(); }); return s; };
+        var bgGain = 1, opts = function () { var o = cs(); o.words = st.words; o.comp = st.comp; o.bg = bg; o.bgGain = bgGain; return o; };
+        var shape = function () {
+            var c = st.comp, vert = c && c.h > c.w * 1.05;
+            cv.style.aspectRatio = c ? (c.w + " / " + c.h) : "";
+            cv.style.height = vert ? "min(40vh, 280px)" : "";
+        };
+        var upd = function () { save(); player.set(opts()); };
+        shape(); player.set(opts()); view.appendChild(cv);
+        /* the comp's own frame under the captions (After Effects renders it at the playhead) */
+        var grabFrame = function () {
+            if (!CEP) return;
+            call("acFrame", {}).then(function (r) {
+                if (!r.ok || !r.data || !r.data.path) return;
+                var p = decodeURIComponent(r.data.path);
+                st.comp = { w: r.data.w, h: r.data.h }; bgGain = r.data.bpc === 32 ? 10 : 1; save(); shape(); player.set(opts());
+                return waitFile(p, 30000).then(function () {
+                    var img = new Image();
+                    img.onload = function () { bg = img; player.set(opts()); };
+                    img.src = "file:///" + p.replace(/^\/+/, "") + "?t=" + Date.now();
+                });
+            }).catch(function () { });
+        };
+
+        var sel = function (opts2, key) { var s = h("select", {}); opts2.forEach(function (o) { s.appendChild(h("option", { value: o[0], text: o[1] })); }); s.value = st[key]; s.addEventListener("change", function () { st[key] = s.value; save(); }); return s; };
         var area = function (key, ph) { var t = h("textarea", { rows: 2, placeholder: ph }); t.value = st[key] || ""; t.addEventListener("input", function () { st[key] = t.value; save(); }); return t; };
-        var sl = function (key, min, max, step, unit, zero) { return slider(min, max, step, st[key], unit, function (v) { st[key] = v; upd(); }, zero); };
-        var tg = function (key) { return toggle(st[key], function (v) { st[key] = v; upd(); }); };
-        var sw = function (key, title) { return swatch(st[key], function (v) { st[key] = v; upd(); }, title); };
         var pair = function (a, b) { return h("div", { class: "row grow", style: "gap:10px;min-height:0" }, a, b); };
         var LANGS = [["", "Auto"], ["ka", "Georgian"], ["en", "English"], ["ru", "Russian"], ["tr", "Turkish"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["uk", "Ukrainian"], ["hy", "Armenian"], ["az", "Azerbaijani"], ["ar", "Arabic"]];
+        /* ---- the API key: written once, kept in a file (and in this panel's storage) */
         var keyInp = h("input", { type: "password", placeholder: "ElevenLabs API key", autocomplete: "off" });
-        try { keyInp.value = localStorage.getItem("uk_el_key") || ""; } catch (e0) { }
-        keyInp.addEventListener("input", function () { try { localStorage.setItem("uk_el_key", keyInp.value.trim()); } catch (e1) { } });
-        /* the words, each one editable (several words typed into one = they share its time; emptied = removed) */
+        var ls = ""; try { ls = localStorage.getItem("uk_el_key") || ""; } catch (e1) { }
+        var kf = rd(KEYF).trim();
+        keyInp.value = kf || ls;
+        if (!kf && ls) wr(KEYF, ls);
+        keyInp.addEventListener("input", function () { var v = keyInp.value.trim(); wr(KEYF, v); try { localStorage.setItem("uk_el_key", v); } catch (e2) { } });
+
+        /* ---- the words, each one editable (several words typed into one = they share its time; emptied = removed) */
         var wordsBox = h("div", { class: "acwords" }), info = h("div", { class: "acinfo" });
         var renderWords = function () {
             wordsBox.innerHTML = "";
             (st.words || []).forEach(function (w, i) {
-                var txt = UKAutoCap.show(w), inp = h("input", { type: "text", value: txt, size: Math.max(2, txt.length), class: (w.lp < -0.6 ? "low" : "") + (w.fixed ? " fixed" : "") });
+                var txt = A.show(w), inp = h("input", { type: "text", value: txt, size: Math.max(2, txt.length), class: (w.lp < -0.6 ? "low" : "") + (w.fixed ? " fixed" : "") });
                 inp.addEventListener("input", function () { inp.size = Math.max(2, inp.value.length); });
                 inp.addEventListener("change", function () {
                     var parts = inp.value.trim().split(/\s+/).filter(Boolean), d = (w.e - w.s) / Math.max(1, parts.length);
-                    var rep = UKAutoCap.normalize({ words: parts.map(function (p, q) { return { text: p, start: w.s + d * q, end: w.s + d * (q + 1) }; }) });
+                    var rep = A.normalize({ words: parts.map(function (p, q) { return { text: p, start: w.s + d * q, end: w.s + d * (q + 1) }; }) });
                     rep.forEach(function (x) { x.fixed = 1; });
                     if (!rep.length && i > 0) st.words[i - 1].e = w.e;
                     Array.prototype.splice.apply(st.words, [i, 1].concat(rep));
@@ -2017,22 +2061,41 @@
             });
             info.textContent = (st.words && st.words.length) ? st.words.length + " words" + (st.src && st.src.file ? "  -  " + st.src.file : "") : "";
         };
-        var tBtn = h("button", { class: "btn", text: "Transcribe" });
+        var GB = 1024 * 1024 * 1024, tBtn = h("button", { class: "btn", text: "Transcribe" });
         tBtn.addEventListener("click", function () {
             if (tBtn.classList.contains("busy")) return;
             tBtn.classList.add("busy"); status("Reading the voice layer...");
+            var tmp = null;
             call("acSource", {}).then(function (r) {
                 if (!r.ok) throw new Error(r.error);
                 var s = r.data; s.path = decodeURIComponent(s.path || ""); s.file = decodeURIComponent(s.file || "");
-                if (s.size > 1024 * 1024 * 1024) throw new Error("The file is larger than 1 GB. Use an audio file of the voice.");
-                status("Transcribing " + s.file + "...");
-                return UKAutoCap.transcribe({ path: s.path, name: s.file, key: keyInp.value.trim(), lang: st.lang, second: st.second, terms: st.terms, model: st.model }).then(function (res) {
-                    UKAutoCap.applyRules(res.words, st.rules);
+                if (s.size > 10 * GB) throw new Error("The file is larger than 10 GB.");
+                if (s.w && s.h) { st.comp = { w: s.w, h: s.h }; shape(); }
+                /* a video, or a big file: After Effects writes its sound to a small WAV first (ElevenLabs takes up to 5 GB, the
+                   panel can't hold a huge file in memory, and the sound is all that is needed) */
+                var src = Promise.resolve({ path: s.path, name: s.file });
+                if (s.video || s.size > 150 * 1024 * 1024) {
+                    status("Extracting the sound of " + s.file + "...");
+                    src = call("acExtract", { path: encodeURIComponent(s.path) }).then(function (x) {
+                        if (x.ok && x.data && x.data.path) { tmp = decodeURIComponent(x.data.path); return { path: tmp, name: "voice.wav" }; }
+                        if (s.size <= 1.5 * GB) return { path: s.path, name: s.file };
+                        throw new Error("Could not extract the sound: " + (x.error || "?"));
+                    });
+                }
+                return src.then(function (f) {
+                    status("Transcribing " + s.file + "...");
+                    return A.transcribe({ path: f.path, name: f.name, key: keyInp.value.trim(), lang: st.lang, second: st.second, terms: st.terms, model: st.model });
+                }).then(function (res) {
+                    A.applyRules(res.words, st.rules);
                     st.words = res.words; st.src = { path: s.path, file: s.file, start: s.start, stretch: s.stretch, inPoint: s.inPoint, outPoint: s.outPoint };
                     upd(); renderWords(); player.t = 0;
                     status(res.note || "", res.note ? "err" : "ok");
+                    grabFrame();
                 });
-            }).catch(function (e) { status(e.message || String(e), "err"); }).then(function () { tBtn.classList.remove("busy"); });
+            }).catch(function (e) { status(e.message || String(e), "err"); }).then(function () {
+                tBtn.classList.remove("busy");
+                if (tmp && fs) { try { fs.deleteFile(tmp); } catch (e3) { } }
+            });
         });
         view.appendChild(section("Voice", h("div", { class: "card" },
             row("API key", keyInp),
@@ -2042,32 +2105,115 @@
             row("Replace", area("rules", "wrong words = right words")),
             row(null, tBtn))));
         view.appendChild(section("Words", info, wordsBox));
-        view.appendChild(section("Caption", h("div", { class: "card" },
-            row("Words", sl("maxWords", 1, 8, 1, "")),
-            row("Line length", sl("maxChars", 0, 44, 1, "", "Off")),
-            row("Punctuation", tg("punct")),
-            row("Size", sl("size", 3, 14, 0.5, "%")),
-            row("Position", sl("posY", 5, 95, 1, "%")),
-            row("Text", pair(sw("color", "Text colour"), sel([["none", "No entrance"], ["fade", "Fade"], ["rise", "Rise"], ["pop", "Pop"], ["slide", "Slide"]], "entrance"))),
-            row("Shadow", tg("shadow")))));
-        view.appendChild(section("Spoken word", h("div", { class: "card" },
-            row("Highlight", pair(sw("hlColor", "Colour of the spoken word"), tg("hl"))),
-            row("Scale", sl("scale", 100, 140, 1, "%")),
-            row("Not said yet", sl("upcoming", 0, 100, 5, "%")),
-            row("Word box", pair(sw("wboxColor", "Colour of the box behind the spoken word"), tg("wbox"))),
-            row("Box opacity", sl("wboxOp", 0, 100, 5, "%")),
-            row("Box corners", sl("wboxRound", 0, 100, 5, "%")))));
-        view.appendChild(section("Caption box", h("div", { class: "card" },
-            row("Box", pair(sw("boxColor", "Colour of the box behind the whole caption"), tg("box"))),
-            row("Opacity", sl("boxOp", 0, 100, 5, "%")),
-            row("Corners", sl("boxRound", 0, 100, 5, "%")))));
-        renderWords();
+
+        /* ---- the styles: tiles (... = Duplicate / Save / Delete), Save all; the selected one's settings below */
+        var grid = h("div", { class: "grid acstyles" }), ctl = h("div", {}), menu = null;
+        var closeMenu = function () { if (menu && menu.parentNode) menu.parentNode.removeChild(menu); menu = null; };
+        document.addEventListener("click", closeMenu);
+        var commit = function (id) { var p = item(id); if (p && lib.drafts[id]) { p.s = A.style(lib.drafts[id]); delete lib.drafts[id]; } };
+        var uniq = function (base) { var n = base, k = 2, has = function (x) { return lib.list.some(function (p) { return p.name === x; }); }; while (has(n)) n = base + " " + k++; return n; };
+        var actions = {
+            dup: function (p) {
+                var c = { id: "my" + Date.now().toString(36), name: uniq(p.name + " copy"), s: styleOf(p) };
+                lib.list.splice(lib.list.indexOf(p) + 1, 0, c);
+                st.sel = c.id; save(); persist(); build(); status("Duplicated: " + c.name, "ok");
+            },
+            save: function (p) { commit(p.id); persist(); build(); status("Saved: " + p.name, "ok"); },
+            del: function (p) {
+                if (!confirm("Delete the style \"" + p.name + "\"?")) return;
+                lib.list.splice(lib.list.indexOf(p), 1); delete lib.drafts[p.id];
+                if (!lib.list.length) lib.list = seed();
+                if (!item(st.sel)) st.sel = lib.list[0].id;
+                save(); persist(); build();
+            }
+        };
+        var tileFor = function (p) {
+            var cvT = h("canvas"), dots = h("button", { class: "dots", title: "Duplicate / Save / Delete", html: '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>' });
+            var nm = h("div", { class: "pn", text: p.name, title: p.name });
+            var t = h("div", { class: "preset" + (p.id === cur().id ? " on" : "") + (lib.drafts[p.id] ? " dirty" : ""), "data-id": p.id }, cvT, dots, nm);
+            t.addEventListener("click", function () { if (st.sel === p.id) return; st.sel = p.id; save(); build(); });
+            dots.addEventListener("click", function (e) {
+                e.stopPropagation();
+                var had = menu && menu.parentNode === t; closeMenu(); if (had) return;
+                menu = h("div", { class: "acmenu" });
+                [["dup", "Duplicate"], ["save", "Save"], ["del", "Delete"]].forEach(function (a) {
+                    var b = h("button", { text: a[1], class: a[0] === "del" ? "danger" : "" });
+                    if (a[0] === "save" && !lib.drafts[p.id]) b.setAttribute("disabled", "");
+                    b.addEventListener("click", function (e2) { e2.stopPropagation(); closeMenu(); actions[a[0]](p); });
+                    menu.appendChild(b);
+                });
+                t.appendChild(menu);
+            });
+            /* double-click the name: rename */
+            nm.addEventListener("dblclick", function (e) {
+                e.stopPropagation();
+                var inp = h("input", { type: "text", value: p.name, class: "acname" });
+                nm.replaceWith(inp); inp.focus(); inp.select();
+                var done = function (ok) { if (ok && inp.value.trim()) { p.name = inp.value.trim(); persist(); } build(); };
+                inp.addEventListener("keydown", function (k) { if (k.key === "Enter") done(true); if (k.key === "Escape") done(false); });
+                inp.addEventListener("blur", function () { done(true); });
+                inp.addEventListener("click", function (k) { k.stopPropagation(); });
+            });
+            requestAnimationFrame(function () { try { var o = styleOf(p); o.thumb = true; A.draw(cvT, 0, o); } catch (e3) { } });
+            return t;
+        };
+        var saveAll = h("button", { class: "btn small", text: "Save all" });
+        saveAll.addEventListener("click", function () { var n = Object.keys(lib.drafts).length; Object.keys(lib.drafts).forEach(commit); persist(); build(); status(n ? "Saved " + n + (n === 1 ? " style" : " styles") : "Everything is saved", "ok"); });
+        /* one setting of the selected style changed: it becomes a draft (dot on its tile) until saved */
+        var edit = function (key, v) {
+            var p = cur();
+            if (!lib.drafts[p.id]) lib.drafts[p.id] = A.style(p.s);
+            lib.drafts[p.id][key] = v;
+            persist(); upd();
+            var t = grid.querySelector('[data-id="' + p.id + '"]');
+            if (t) { t.classList.add("dirty"); var c = t.querySelector("canvas"); try { var o = styleOf(p); o.thumb = true; A.draw(c, 0, o); } catch (e4) { } }
+        };
+        var buildCtl = function () {
+            var s = cs(), sl = function (key, min, max, step, unit, zero) { return slider(min, max, step, s[key], unit, function (v) { edit(key, v); }, zero); };
+            var tg = function (key) { return toggle(s[key], function (v) { edit(key, v); }); };
+            var sw = function (key, title) { return swatch(s[key], function (v) { edit(key, v); }, title); };
+            var ent = h("select", {});
+            [["none", "No entrance"], ["fade", "Fade"], ["rise", "Rise"], ["pop", "Pop"], ["slide", "Slide"]].forEach(function (o) { ent.appendChild(h("option", { value: o[0], text: o[1] })); });
+            ent.value = s.entrance; ent.addEventListener("change", function () { edit("entrance", ent.value); });
+            ctl.innerHTML = "";
+            ctl.appendChild(section("Caption", h("div", { class: "card" },
+                row("Words", sl("maxWords", 0, 10, 1, "", "Auto")),
+                row("Line length", sl("maxChars", 0, 60, 1, "", "Auto")),
+                row("Punctuation", tg("punct")),
+                row("Size", sl("size", 3, 14, 0.5, "%")),
+                row("Position", sl("posY", 0, 95, 1, "%", "Auto")),
+                row("Text", pair(sw("color", "Text colour"), ent)),
+                row("Shadow", tg("shadow")))));
+            ctl.appendChild(section("Spoken word", h("div", { class: "card" },
+                row("Highlight", pair(sw("hlColor", "Colour of the spoken word"), tg("hl"))),
+                row("Scale", sl("scale", 100, 140, 1, "%")),
+                row("Not said yet", sl("upcoming", 0, 100, 5, "%")),
+                row("Word box", pair(sw("wboxColor", "Colour of the box behind the spoken word"), tg("wbox"))),
+                row("Box opacity", sl("wboxOp", 0, 100, 5, "%")),
+                row("Box corners", sl("wboxRound", 0, 100, 5, "%")))));
+            ctl.appendChild(section("Caption box", h("div", { class: "card" },
+                row("Box", pair(sw("boxColor", "Colour of the box behind the whole caption"), tg("box"))),
+                row("Opacity", sl("boxOp", 0, 100, 5, "%")),
+                row("Corners", sl("boxRound", 0, 100, 5, "%")))));
+        };
+        var build = function () {
+            closeMenu();
+            grid.innerHTML = "";
+            lib.list.forEach(function (p) { grid.appendChild(tileFor(p)); });
+            buildCtl(); upd();
+        };
+        var bar = h("div", { class: "acbar" }, h("div", { class: "label", text: "Styles" }), saveAll);
+        view.appendChild(h("div", { class: "section" }, bar, grid));
+        view.appendChild(ctl);
+        build(); renderWords();
         player.start();
+        grabFrame();
         btnApply.onclick = function () {
             if (!st.words || !st.words.length) { status("Transcribe the voice first", "err"); return; }
-            var a = { blocks: UKAutoCap.blocks(st.words, st), path: st.src ? encodeURIComponent(st.src.path || "") : "" };
+            var s = cs(), L = A.layout(s, st.comp), a = { blocks: A.blocks(st.words, s, st.comp), path: st.src ? encodeURIComponent(st.src.path || "") : "" };
             if (st.src) a.src = { start: st.src.start, stretch: st.src.stretch, inPoint: st.src.inPoint, outPoint: st.src.outPoint };
-            ["size", "posY", "color", "maxChars", "punct", "hl", "hlColor", "scale", "upcoming", "entrance", "shadow", "wbox", "wboxColor", "wboxOp", "wboxRound", "box", "boxColor", "boxOp", "boxRound"].forEach(function (k) { a[k] = st[k]; });
+            A.KEYS.forEach(function (k) { a[k] = s[k]; });
+            a.maxChars = L.maxChars; a.posY = L.posY;
             run("autoCaption", a, function (d) { return d.captions + " captions"; }, btnApply);
         };
     }

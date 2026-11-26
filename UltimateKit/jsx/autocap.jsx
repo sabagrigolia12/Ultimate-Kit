@@ -32,10 +32,60 @@ UK.AC.audio = function (comp, path) {
     return null;
 };
 UK.api.acSource = function (a) {
-    var comp = UK.comp(true), L = UK.AC.audio(comp, null);
+    var comp = UK.comp(false), L = UK.AC.audio(comp, null);
     if (!L) throw new Error("Select the layer with the voice (an audio or video file).");
-    var f = UK.AC.file(L);
-    return { name: L.name, path: encodeURIComponent(f.fsName.replace(/\\/g, "/")), file: encodeURIComponent(decodeURI(f.name)), size: f.length, start: L.startTime, stretch: L.stretch, inPoint: L.inPoint, outPoint: L.outPoint, comp: comp.name };
+    var f = UK.AC.file(L), video = false;
+    try { video = !!L.source.hasVideo && !L.source.mainSource.isStill; } catch (e) { }
+    return { name: L.name, path: encodeURIComponent(f.fsName.replace(/\\/g, "/")), file: encodeURIComponent(decodeURI(f.name)), size: f.length, video: video,
+        start: L.startTime, stretch: L.stretch, inPoint: L.inPoint, outPoint: L.outPoint, comp: comp.name, w: comp.width, h: comp.height };
+};
+/* the active comp's frame at the playhead as a PNG for the panel's preview (written a moment after this returns) */
+UK.api.acFrame = function () {
+    var comp = UK.comp(false);
+    if (!comp) return { path: "" };
+    var d = new Folder(Folder.userData.fsName + "/UltimateKit/autocap");
+    if (!d.exists) d.create();
+    var f = new File(d.fsName + "/frame.png");
+    try { if (f.exists) f.remove(); } catch (e0) { }
+    comp.saveFrameToPng(UK.snap(comp, comp.time), f);
+    var bpc = 8; try { bpc = app.project.bitsPerChannel; } catch (e1) { }
+    return { path: encodeURIComponent(f.fsName.replace(/\\/g, "/")), w: comp.width, h: comp.height, bpc: bpc };
+};
+/* the sound of the voice layer's file as a small WAV (mono 16 kHz when After Effects takes those settings), rendered
+   through a temporary render-queue item: the user's own queue items are switched off meanwhile and put back */
+UK.api.acExtract = function (a) {
+    var comp = UK.comp(false), L = UK.AC.audio(comp, decodeURIComponent(a.path || "")), RQ = app.project.renderQueue, keep = [], i;
+    if (!L || !L.source) throw new Error("The voice layer was not found.");
+    var F = L.source, C = null, it = null, out = null;
+    var d = new Folder(Folder.temp.fsName + "/UltimateKit");
+    if (!d.exists) d.create();
+    try {
+        C = app.project.items.addComp("UK Voice Sound", 100, 100, 1, Math.max(F.duration, 1), (F.frameRate > 0 ? F.frameRate : 30));
+        var V = C.layers.add(F); V.startTime = 0;
+        try { V.enabled = false; } catch (eV) { }                       // (sound only)
+        try { V.audioEnabled = true; } catch (eA) { }
+        for (i = 1; i <= RQ.numItems; i++) { var q = RQ.item(i); keep.push(q.render); try { if (q.status === RQItemStatus.QUEUED) q.render = false; } catch (eQ) { } }
+        it = RQ.items.add(C);
+        var om = it.outputModule(1), done = false, tries = [{ "Format": "WAV" }, { "Output Audio": "On" }, { "Audio Sample Rate": 16000 }, { "Audio Channels": "Mono" }, { "Audio Bit Depth": "16 Bit" }];
+        for (i = 0; i < tries.length; i++) { try { om.setSettings(tries[i]); } catch (eS) { } }
+        try { done = /wav|wave/i.test(String(om.getSettings(GetSettingsFormat.STRING)["Format"])); } catch (eG) { }
+        if (!done) {                                                    // older / other settings: a sound template
+            var T = []; try { T = om.templates; } catch (eT) { }
+            for (i = 0; i < T.length && !done; i++) if (/aiff|wav/i.test(T[i])) { try { om.applyTemplate(T[i]); done = true; } catch (eT2) { } }
+        }
+        if (!done) throw new Error("no sound output format");
+        out = new File(d.fsName + "/voice_" + new Date().getTime() + (/aiff/i.test(String(om.getSettings(GetSettingsFormat.STRING)["Format"])) ? ".aif" : ".wav"));
+        om.file = out;
+        var target = om.file.fsName;
+        RQ.render();
+        out = new File(target);
+        if (!out.exists || out.length < 100) throw new Error("the sound file was not written");
+        return { path: encodeURIComponent(out.fsName.replace(/\\/g, "/")), size: out.length };
+    } finally {
+        try { if (it) it.remove(); } catch (e1) { }
+        for (i = 1; i <= Math.min(RQ.numItems, keep.length); i++) { try { if (RQ.item(i).render !== keep[i - 1]) RQ.item(i).render = keep[i - 1]; } catch (e2) { } }
+        try { if (C) C.remove(); } catch (e3) { }
+    }
 };
 
 UK.AC.q = function (s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; };
