@@ -49,6 +49,7 @@ var UK_GFX = (function () {
         "  else if (f == '2d') { s = p2(Math.max(0, v)); }\n" +
         "  else if (f == 'cs') { s = p2(((Math.floor(v) % 100) + 100) % 100); }\n" +
         "  else if (f == 'k') { var a = Math.abs(v); s = a >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : (a >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v))); }\n" +
+        "  else if (f == 'plain') { s = String(Math.round(v)); }\n" +
         "  else if (f == 'dec1') { s = v.toFixed(1); }\n" +
         "  else if (f == 'dec2') { s = v.toFixed(2); }\n" +
         "  else { var n = String(Math.round(Math.abs(v))), o = ''; while (n.length > 3) { o = ',' + n.substr(n.length - 3) + o; n = n.substr(0, n.length - 3); } s = (v < 0 ? '-' : '') + n + o; }\n" +

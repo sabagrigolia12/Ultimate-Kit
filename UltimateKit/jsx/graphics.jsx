@@ -99,6 +99,16 @@ UK.GFX.layer = function (C, l, S, boxes) {
             UK.addRepeater(UK.vecs(gc), Math.ceil(W / l.gap) + 1, [l.gap, 0], "Across");
         }
         UK.GFX.fade(L, l.fade);
+    } else if (l.t === "hexes") {                      // a honeycomb: even and odd rows, each a polygon repeated across and down
+        L = shape(); UK.pos(L).setValue([0, 0]); UK.anchor(L).setValue([0, 0]);
+        var nx = Math.ceil(W / l.dx) + 2, ny = Math.ceil((H + l.dy) / (l.dy * 2)) + 1, rw;
+        for (rw = 0; rw < 2; rw++) {
+            var gh = UK.group(UK.root(L), rw ? "Odd Rows" : "Even Rows");
+            UK.addStar(UK.vecs(gh), { points: 6, outer: l.R, polygon: true, pos: [l.x0 + (rw ? l.dx / 2 : 0), l.y0 + rw * l.dy] }, "Hexagon");
+            UK.addStroke(UK.vecs(gh), l.c, l.sw, { join: 2 }, "Hex Stroke");
+            UK.addRepeater(UK.vecs(gh), nx, [l.dx, 0], "Across");
+            UK.addRepeater(UK.vecs(gh), ny, [0, l.dy * 2], "Down");
+        }
     } else if (l.t === "edge") {
         L = shape(); UK.pos(L).setValue([W / 2, H / 2]); UK.anchor(L).setValue([0, 0]);
         var ge = UK.group(UK.root(L), "Frame");
@@ -127,8 +137,12 @@ UK.GFX.layer = function (C, l, S, boxes) {
         td.setValue(d);
         L.name = l.name || "Text";
         if (l.count) {
-            var sl = UK.slider(L, "Value", l.a.length ? 0 : 0);
-            td.expression = UK_GFX.FMT_SRC + "\nfmt(effect(\"Value\")(1), " + UK.json(l.count.f || "int") + ", " + UK.json(l.count.pre || "") + ", " + UK.json(l.count.suf || "") + ");";
+            /* a Slider takes -1,000,000..1,000,000: bigger counts are keyed in thousands ("Value (x1000)") */
+            var big = false, ai, ki;
+            for (ai = 0; ai < l.a.length; ai++) if (l.a[ai].p === "val") for (ki = 0; ki < l.a[ai].k.length; ki++) if (Math.abs(l.a[ai].k[ki][1]) >= 1000000) big = true;
+            l._valName = big ? "Value (x1000)" : "Value"; l._valMul = big ? 1000 : 1;
+            UK.slider(L, l._valName, 0);
+            td.expression = UK_GFX.FMT_SRC + "\nfmt(effect(\"" + l._valName + "\")(1)" + (big ? " * 1000" : "") + ", " + UK.json(l.count.f || "int") + ", " + UK.json(l.count.pre || "") + ", " + UK.json(l.count.suf || "") + ");";
         }
         /* fit the width, then put the anchor where the spec means it (middle of the line, left / centre / right) */
         var endT = Math.max(0, S.dur - 0.01), r = L.sourceRectAtTime(endT, false);
@@ -148,12 +162,6 @@ UK.GFX.layer = function (C, l, S, boxes) {
     } else {
         L = shape(); UK.pos(L).setValue([l.x || 0, l.y || 0]); UK.anchor(L).setValue([0, 0]);
         var o = org(), g = UK.group(UK.root(L), l.name || l.t);
-        if (l.t === "ring" && l.track) {
-            var gt = UK.group(UK.root(L), "Track");
-            UK.addEllipse(UK.vecs(gt), [l.R * 2, l.R * 2], [0, 0], "Track Ellipse");
-            UK.addStroke(UK.vecs(gt), l.track, l.sw, { cap: 2 }, "Track Stroke");
-            UK.root(L).property("Track").moveTo(2);                      // under the ring
-        }
         if (l.t === "rect") UK.addRect(UK.vecs(g), [l.w, l.h], o, l.r || 0, "Rect");
         else if (l.t === "ell") UK.addEllipse(UK.vecs(g), [l.w, l.h], o, "Ellipse");
         else if (l.t === "ring") UK.addEllipse(UK.vecs(g), [l.R * 2, l.R * 2], [0, 0], "Ring");
@@ -187,6 +195,11 @@ UK.GFX.layer = function (C, l, S, boxes) {
             UK.GFX.ramp(L, q.c1, q.c2, q.kind === "rad" ? "rad" : "lin", p1, p2);
         }
         if (l.blur) { var big = Math.max(l.w || 0, l.h || 0, (l.R || 0) * 2) + l.blur * 6; UK.GFX.blur(L, l.blur, [big, big]); }
+        if (l.t === "ring" && l.track) {                // the ring's track: a group added after it = drawn under it
+            var gt = UK.group(UK.root(L), "Track");
+            UK.addEllipse(UK.vecs(gt), [l.R * 2, l.R * 2], [0, 0], "Track Ellipse");
+            UK.addStroke(UK.vecs(gt), l.track, l.sw, { cap: 2 }, "Track Stroke");
+        }
         if (trimP) trimP = UK.vecs(UK.root(L).property(l.name || l.t)).property("Trim Paths");
     }
     UK.GFX.blend(L, l.blend);
@@ -200,7 +213,7 @@ UK.GFX.layer = function (C, l, S, boxes) {
         else if (an.p === "op") UK.GFX.keys(UK.opac(L), an);
         else if (an.p === "rot") UK.GFX.keys(UK.rot(L), an);
         else if (an.p === "sc") UK.GFX.keys(UK.scale(L), an, function (v) { return v instanceof Array ? v : [v, v]; });
-        else if (an.p === "val") UK.GFX.keys(UK.efx(L, "Value").property(1), an);
+        else if (an.p === "val") UK.GFX.keys(UK.efx(L, l._valName || "Value").property(1), an, function (v) { return v / (l._valMul || 1); });
         else if (an.p === "chars") {                                     // typing: one Source Text key per letter (hold keys)
             var TP = UK.textDoc(L), full = String(TP.value.text), n0 = an.k[0][1], n1 = an.k[an.k.length - 1][1], ta = an.k[0][0], tb = an.k[an.k.length - 1][0], ch;
             for (ch = n0; ch <= n1; ch++) { var dd = TP.value; dd.text = ch > 0 ? full.substr(0, ch) : " "; TP.setValueAtTime(ta + (tb - ta) * (ch - n0) / Math.max(1, n1 - n0), dd); }

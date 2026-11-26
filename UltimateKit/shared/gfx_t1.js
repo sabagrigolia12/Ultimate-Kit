@@ -271,16 +271,16 @@
     G.def("g14", "Notification", [["app", "App", "Ultimate"], ["init", "Icon letter", "U"], ["t1", "Title 1", "New order received"], ["m1", "Message 1", "Order #2481 - $129.00"], ["t2", "Title 2", "Payment confirmed"], ["m2", "Message 2", "Funds arrive tomorrow"]], function (c) {
         var P = c.P, u = c.u, W = c.W, H = c.H, st = c.por, i;
         G.back(c, { overlay: "dots", at: [c.cx, H * 0.35], orbs: [[0.5, 0.4, 60, "accent2", 20]] });
-        var nw = Math.min(W * 0.86, u * 80), nh = u * 17, list = [];
+        var nw = Math.min(W * 0.88, u * 104), nh = u * 21, list = [];
         for (i = 0; i < 2; i++) {
-            var y = (st ? H * 0.4 : H * 0.38) + i * (nh + u * 3), x = c.cx, lx = x - nw / 2 + u * 3;
+            var y = (st ? H * 0.4 : H * 0.36) + i * (nh + u * 3.4), x = c.cx, lx = x - nw / 2 + u * 3.4;
             var card = G.card(c, "Notification " + (i + 1), x, y, nw, nh, { r: u * 3.2, fill: P.panel, fillOp: P.dark ? 92 : 100 });
-            var ic = c.add("rect", { name: "App Icon " + (i + 1), x: lx + u * 4.5, y: y, w: u * 9, h: u * 9, r: u * 2.2, fill: P.accent, grad: { c1: P.accent, c2: P.accent2, dir: "v" } });
-            var il = G.text(c, "init", ic.x, y, "display", u * 4.6, P.dark ? P.bg2 : "#FFFFFF", { name: "Icon Letter " + (i + 1) });
-            var app = G.text(c, "app", lx + u * 11.5, y - u * 4.2, "head", u * 2.2, P.sub, { just: "left", name: "App " + (i + 1), caps: true, track: 120 });
-            var now = G.text(c, "", x + nw / 2 - u * 3, y - u * 4.2, "body", u * 2.2, P.sub, { just: "right", s: i ? "1m ago" : "now", name: "Time " + (i + 1) });
-            var t = G.text(c, "t" + (i + 1), lx + u * 11.5, y - u * 0.4, "head", u * 3.2, P.text, { just: "left", maxW: nw * 0.7 });
-            var m = G.text(c, "m" + (i + 1), lx + u * 11.5, y + u * 3.6, "body", u * 2.6, P.sub, { just: "left", maxW: nw * 0.7 });
+            var ic = c.add("rect", { name: "App Icon " + (i + 1), x: lx + u * 5.5, y: y, w: u * 11, h: u * 11, r: u * 2.6, fill: P.accent, grad: { c1: P.accent, c2: P.accent2, dir: "v" } });
+            var il = G.text(c, "init", ic.x, y, "display", u * 5.6, P.dark ? P.bg2 : "#FFFFFF", { name: "Icon Letter " + (i + 1) });
+            var app = G.text(c, "app", lx + u * 14, y - u * 5.2, "head", u * 2.6, P.sub, { just: "left", name: "App " + (i + 1), caps: true, track: 120 });
+            var now = G.text(c, "", x + nw / 2 - u * 3.4, y - u * 5.2, "body", u * 2.6, P.sub, { just: "right", s: i ? "1m ago" : "now", name: "Time " + (i + 1) });
+            var t = G.text(c, "t" + (i + 1), lx + u * 14, y - u * 0.5, "head", u * 4, P.text, { just: "left", maxW: nw * 0.7 });
+            var m = G.text(c, "m" + (i + 1), lx + u * 14, y + u * 4.4, "body", u * 3.2, P.sub, { just: "left", maxW: nw * 0.7 });
             list.push([card, ic, il, app, now, t, m]);
         }
         G.edge(c, { op: 40 });
@@ -441,12 +441,12 @@
     G.def("g23", "Discount Burst", [["top", "Top line", "LIMITED OFFER"], ["big", "Discount", "-50%"], ["sub", "Subline", "Only this weekend"]], function (c) {
         var P = c.P, u = c.u, W = c.W, H = c.H, st = c.por;
         G.back(c, { overlay: "dots", at: [c.cx, H * 0.48], reach: 0.6 });
-        var R = Math.min(W, H) * 0.36, cy = H * 0.5;
+        var R = Math.min(W, H) * 0.3, cy = H * 0.5;
         var burst2 = c.add("star", { name: "Burst Back", x: c.cx, y: cy, R: R * 1.08, r: R * 0.82, n: 24, fill: P.accent2, op: 50 });
         var burst = c.add("star", { name: "Burst", x: c.cx, y: cy, R: R, r: R * 0.8, n: 24, fill: P.accent, grad: { c1: P.accent, c2: P.accent2, kind: "rad", p1: [0, 0], p2: [0, R] } });
         var big = G.text(c, "big", c.cx, cy, "display", R * 0.62, P.dark ? P.bg2 : "#FFFFFF", { maxW: R * 1.5 });
-        var top = G.text(c, "top", c.cx, cy - R * 1.32, "head", u * 3.4, P.text, { track: 300 });
-        var sub = G.text(c, "sub", c.cx, cy + R * 1.32, "head", u * 3.4, P.sub);
+        var top = G.text(c, "top", c.cx, cy - R * 1.27, "head", u * 3.4, P.text, { track: 300 });
+        var sub = G.text(c, "sub", c.cx, cy + R * 1.27, "head", u * 3.4, P.sub);
         G.edge(c, { op: 50 });
         G.pop(c, burst2, 0.15, 0.8); G.pop(c, burst, 0.2, 0.8); G.key(burst, "rot", [[0.2, -30], [c.dur, 40]], E.inout, "light"); G.key(burst2, "rot", [[0.15, 20], [c.dur, -30]], E.inout, "light");
         G.zoom(c, big, 0.45, 0.8, 1.6); G.rise(c, top, 0.6); G.rise(c, sub, 0.7);

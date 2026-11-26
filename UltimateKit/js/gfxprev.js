@@ -82,6 +82,14 @@ var UKGfxPrev = (function () {
             var st = l.gap;
             for (j = (H / 2) % st; j < H; j += st) for (i = 0; i < W; i += st) cell(i, j, i + st, j);
             if (!l.rows) for (i = (W / 2) % st; i < W; i += st) for (j = 0; j < H; j += st) cell(i, j, i, j + st);
+        } else if (l.t === "hexes") {
+            g.strokeStyle = l.c; g.lineWidth = l.sw;
+            for (j = 0; l.y0 + j * l.dy < H + l.dy; j++) for (i = 0; l.x0 + i * l.dx < W + l.dx; i++) {
+                var hx0 = l.x0 + i * l.dx + (j % 2 ? l.dx / 2 : 0), hy0 = l.y0 + j * l.dy, q2;
+                g.beginPath();
+                for (q2 = 0; q2 < 6; q2++) { var an2 = -Math.PI / 2 + q2 * Math.PI / 3; g[q2 ? "lineTo" : "moveTo"](hx0 + Math.cos(an2) * l.R, hy0 + Math.sin(an2) * l.R); }
+                g.closePath(); g.stroke();
+            }
         } else if (l.t === "edge") {
             g.strokeStyle = l.c; g.lineWidth = l.w * 1.4; g.filter = "blur(" + (l.blur * 0.55).toFixed(1) + "px)";
             g.strokeRect(0, 0, W, H);

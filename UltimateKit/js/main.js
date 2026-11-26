@@ -523,6 +523,7 @@
         { id: "saasText", name: "SaaS Text", icon: "sparkT", list: C.textSaas, page: pageText },
         { id: "captions", name: "Captions", icon: "caption", list: CAPS, page: pageCaptions },
         { id: "autocap", name: "Auto Captions", icon: "autocap", page: pageAutoCap },
+        { id: "graphics", name: "Graphics", icon: "graphics", list: GFXS, page: pageGraphics },
         { id: "hover", name: "Hover & Cursor", icon: "cursor", page: pageHover },
         { id: "bounce", name: "Bounce", icon: "bounce", page: pageBounce },
         { id: "glass", name: "Glass", icon: "glass", list: GLASSES, page: pageGlass },
