@@ -2097,13 +2097,21 @@
                 if (tmp && fs) { try { fs.deleteFile(tmp); } catch (e3) { } }
             });
         });
+        /* Reset: the transcribed words go, a new Transcribe starts clean (the key, languages, names and styles stay) */
+        var resetBtn = h("button", { class: "btn", text: "Reset" });
+        resetBtn.addEventListener("click", function () {
+            if (st.words && st.words.length && !confirm("Clear the transcribed words?")) return;
+            tBtn.classList.remove("busy");                                  // (also frees a Transcribe that got stuck)
+            st.words = null; st.src = null; save();
+            renderWords(); player.t = 0; upd(); status("");
+        });
         view.appendChild(section("Voice", h("div", { class: "card" },
             row("API key", keyInp),
             row("Language", pair(sel(LANGS, "lang"), sel([["", "Only it"]].concat(LANGS.slice(1).map(function (l) { return [l[0], "+ " + l[1]]; })), "second"))),
             row("Model", sel([["scribe_v2", "Scribe v2"], ["scribe_v3", "Scribe v3"], ["scribe_v1", "Scribe v1"]], "model")),
             row("Names", area("terms", "Lurpak, iPhone, ...")),
             row("Replace", area("rules", "wrong words = right words")),
-            row(null, tBtn))));
+            row(null, h("div", { class: "row grow", style: "gap:8px;min-height:0" }, tBtn, resetBtn)))));
         view.appendChild(section("Words", info, wordsBox));
 
         /* ---- the styles: tiles (... = Duplicate / Save / Delete), Save all; the selected one's settings below */

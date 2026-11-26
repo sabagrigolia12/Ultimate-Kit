@@ -86,7 +86,10 @@ UK.api.acExtract = function (a) {
         out = new File(d.fsName + "/voice_" + new Date().getTime() + (/aiff/i.test(String(om.getSettings(GetSettingsFormat.STRING)["Format"])) ? ".aif" : ".wav"));
         om.file = out;
         var target = om.file.fsName;
-        RQ.render();
+        /* rendering inside the open undo group (UK.call) makes After Effects stop with "Undo group mismatch": close it for
+           the render, open it again for UK.call to close */
+        try { app.endUndoGroup(); } catch (eU) { }
+        try { RQ.render(); } finally { try { app.beginUndoGroup("Ultimate Kit: sound"); } catch (eU2) { } }
         out = new File(target);
         if (!out.exists || out.length < 100) throw new Error("the sound file was not written");
         return { path: encodeURIComponent(out.fsName.replace(/\\/g, "/")), size: out.length };
