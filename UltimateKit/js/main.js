@@ -177,6 +177,7 @@
         highlight: '<rect x="4" y="8" width="16" height="8" opacity=".45"/><path d="M4 6.5v11M20 6.5v11"/><circle cx="4" cy="5.6" r="1.4"/><circle cx="20" cy="18.4" r="1.4"/>',
         overlay: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 10.5h18M10 4v16" opacity=".6"/><rect x="12" y="6" width="7" height="3" rx=".8"/>',
         flag: '<path d="M5 21V3.5"/><path d="M5 4.5c2.6-1.6 5 .9 7.5-.4s4.4-1.1 6.5.1v8.6c-2.1-1.2-4-1.5-6.5-.1S7.6 11.1 5 12.7"/>',
+        graphics: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 15.5c4-3.5 9-4.5 18-2" opacity=".6"/><circle cx="8.5" cy="10" r="1.6"/><path d="M13 9.5h5M13 12h3"/>',
         caption: '<rect x="3" y="5" width="18" height="14" rx="2.5" opacity=".45"/><path d="M7 11h3.5"/><path d="M13 11h4" stroke-width="2.6"/><path d="M7 15h6.5"/>',
         autocap: '<rect x="3" y="5" width="18" height="14" rx="2.5" opacity=".45"/><path d="M7 14.5v-5M10 16v-8M13 13.5v-3"/><path d="M16 10.5h1.5M16 13.5h1.5"/>',
         search: '<circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/>',
@@ -510,6 +511,8 @@
     var WAVES = [{ id: "fw01", name: "Flag Wave", look: "flag" }];
     /* Captions (shared/captions.js: caption / title styles with their entrances; jsx/captions.jsx builds them) */
     var CAPS = UK_CAP.LOOKS.map(function (l) { return { id: l.id, name: l.name }; });
+    /* Graphics (shared/graphics.js + gfx_t*.js: promo / SaaS graphics laid out for any comp, jsx/graphics.jsx builds them) */
+    var GFXS = UK_GFX.T.map(function (t) { return { id: t.id, name: t.name }; });
     /* Glass looks (jsx/glass.jsx: gl01 build, gl02 buildBox) */
     var GLASSES = [
         { id: "gl01", name: "Frosted Glass", look: "frost" },
@@ -1975,6 +1978,140 @@
             run("caption", { id: K.id, anim: st.anim || "", what: st.what, mode: st.mode, inDur: st.inDur, outDur: st.outDur, hold: st.hold, text: st.text, font: st.font, glow: st.glow, colors: st.ov[K.id] || {} },
                 function (d) { return K.name + ": " + (d.layers || []).join(", "); }, btnApply);
         });
+    }
+
+    /* ------------------------------------------------------------ graphics */
+    /* ready-made promo graphics (shared/graphics.js + gfx_t*.js): laid out for the comp they go in, every move keyed.
+       Before Apply: the texts, the colours (each graphic has its own palettes: 10 to start with, add / delete / edit),
+       speed, light speed, length, overlay, edge glow. Palettes: <userData>/UltimateKit/graphics/palettes.json         */
+    function pageGraphics(cat) {
+        var G = UK_GFX, st = state(cat.id, { sel: "g01", texts: {}, speed: 1, light: 1, dur: 0, overlay: "auto", edge: true, fmt: "comp" });
+        if (!st.texts) st.texts = {};
+        if (!isMine(st.sel) && !C.find(cat.list, st.sel)) st.sel = cat.list[0].id;
+        var dir = fs ? userDir("graphics") : "", PF = dir + "/palettes.json", pals = null;
+        try { pals = JSON.parse(fs ? ((function () { var r = fs.readFile(PF); return r.err ? "null" : r.data; })() || "null") : JSON.stringify(STORE.gfxPals || null)); } catch (e0) { pals = null; }
+        pals = pals || {};
+        var persist = function () { if (fs) { try { fs.writeFile(PF, JSON.stringify(pals)); } catch (e1) { status("Could not save the palettes", "err"); } } else { STORE.gfxPals = pals; save(); } };
+        var copy = function (o) { return JSON.parse(JSON.stringify(o)); };
+        var palsOf = function (id) { if (!pals[id]) pals[id] = { list: copy(G.PALETTES), sel: G.PALETTES[0].id }; return pals[id]; };
+        var palOf = function (id) { var P = palsOf(id); for (var i = 0; i < P.list.length; i++) if (P.list[i].id === P.sel) return P.list[i]; return P.list[0]; };
+        var cur = function () { return isMine(st.sel) ? cat.list[0].id : st.sel; };
+        var comp = { w: 1920, h: 1080 };
+        var size = function () {
+            if (st.fmt === "wide") return { w: 1920, h: 1080 };
+            if (st.fmt === "tall") return { w: 1080, h: 1920 };
+            if (st.fmt === "square") return { w: 1080, h: 1080 };
+            return comp;
+        };
+        var opts = function () { return { overlay: st.overlay, edge: st.edge, dur: st.dur || 0 }; };
+        var specFor = function (id, w, h) { return G.timed(G.spec(id, w, h, palOf(id), st.texts[id] || {}, opts()), st.speed, st.light); };
+        var cv = h("canvas", { class: "preview cine" }), player = new UKGfxPrev.Player(cv);
+        preview = player;
+        var shape = function () { var z = size(); cv.style.aspectRatio = z.w + " / " + z.h; cv.style.height = z.h > z.w * 1.05 ? "min(40vh, 280px)" : ""; };
+        var upd = function (restart) { save(); var z = size(); player.set(specFor(cur(), z.w, z.h)); if (restart) player.t = 0; };
+        shape(); upd(true); view.appendChild(cv);
+        if (CEP) call("gfxComp", {}).then(function (r) { if (r.ok && r.data && r.data.w) { comp = { w: r.data.w, h: r.data.h }; shape(); upd(); } });
+
+        /* ---- texts of the selected graphic */
+        var textBox = h("div", { class: "card" });
+        var buildTexts = function () {
+            var t = G.find(cur()), T = st.texts[t.id] || (st.texts[t.id] = {});
+            textBox.innerHTML = "";
+            t.fields.forEach(function (f) {
+                var inp = h("input", { type: "text", value: T[f[0]] !== undefined ? T[f[0]] : f[2] });
+                inp.addEventListener("input", function () { T[f[0]] = inp.value; upd(); lib.rebuild(); });
+                textBox.appendChild(row(f[1], inp));
+            });
+        };
+        /* ---- palettes: chips (select, + duplicate, x delete) and the selected one's colours */
+        var chips = h("div", { class: "gfxchips" }), roles = h("div", { class: "gfxroles" });
+        var buildPals = function () {
+            var id = cur(), P = palsOf(id);
+            chips.innerHTML = "";
+            P.list.forEach(function (p) {
+                var dots = h("div", { class: "gfxdots" });
+                ["bg1", "accent", "accent2", "text"].forEach(function (r) { var d = h("span"); d.style.background = p[r]; dots.appendChild(d); });
+                var del = h("button", { class: "gfxdel", title: "Delete this palette", html: svgIcon("x") });
+                var c = h("div", { class: "gfxchip" + (p.id === P.sel ? " on" : ""), title: p.name }, dots, h("div", { class: "gfxpn", text: p.name }), del);
+                c.addEventListener("click", function () { P.sel = p.id; persist(); buildPals(); upd(); lib.rebuild(); });
+                del.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    if (P.list.length <= 1) return;
+                    if (!confirm("Delete the palette \"" + p.name + "\"?")) return;
+                    P.list.splice(P.list.indexOf(p), 1);
+                    if (P.sel === p.id) P.sel = P.list[0].id;
+                    persist(); buildPals(); upd(); lib.rebuild();
+                });
+                chips.appendChild(c);
+            });
+            var add = h("div", { class: "gfxchip add", title: "Add a palette (a copy of the selected one)", html: svgIcon("plus") });
+            add.addEventListener("click", function () {
+                var src = palOf(id), n = copy(src);
+                n.id = "my" + Date.now().toString(36); n.name = src.name + " copy";
+                P.list.push(n); P.sel = n.id; persist(); buildPals(); upd(); lib.rebuild();
+            });
+            chips.appendChild(add);
+            /* the colours of the selected palette (changes are kept) */
+            var p = palOf(id);
+            roles.innerHTML = "";
+            G.ROLES.forEach(function (r) {
+                roles.appendChild(h("label", { class: "gfxrole" }, swatch(p[r], function (v) { p[r] = v; persist(); upd(); var t = chips.querySelector(".gfxchip.on .gfxdots"); if (t) buildPalsSoon(); }, G.ROLE_NAMES[r]), h("span", { text: G.ROLE_NAMES[r] })));
+            });
+            var nm = h("input", { type: "text", value: p.name, class: "gfxname" });
+            nm.addEventListener("change", function () { p.name = nm.value.trim() || p.name; persist(); buildPals(); });
+            roles.appendChild(nm);
+        };
+        var soonT = 0, buildPalsSoon = function () { clearTimeout(soonT); soonT = setTimeout(function () { var keep = document.activeElement; if (keep && keep.type === "color") return; buildPals(); lib.rebuild(); }, 600); };
+
+        /* ---- the library */
+        var lib = library(cat, st, {
+            draw: function (c2, p) { var S = specFor(p.id, 1920, 1080); UKGfxPrev.draw(c2, S, S.dur); },
+            anim: function (c2, p, t) { var S = specFor(p.id, 1920, 1080); UKGfxPrev.draw(c2, S, t % (S.dur + 0.8)); },
+            onPick: function (p) { if (p.custom) return; buildTexts(); buildPals(); upd(true); },
+            onHover: function (p) { var z = size(); player.set(specFor(p && !p.custom ? p.id : cur(), z.w, z.h)); player.t = 0; },
+            onCarry: !/^win/i.test(navigator.platform) ? null : function (p, tile) { return carryGfx(p, tile); }
+        });
+        var apply = function (id) {
+            id = id || cur();
+            run("graphic", { id: id, pal: palOf(id), texts: G.texts(G.find(id), st.texts[id] || {}), overlay: st.overlay, edge: st.edge, speed: st.speed, light: st.light, dur: st.dur || 0 },
+                function (d) { return G.find(id).name + ": " + (d.layers || []).join(", "); }, btnApply);
+        };
+        /* a tile carried out of the panel: dropped anywhere on After Effects = applied to the active comp */
+        var carryGfx = function (p, tile) {
+            var Pr = window.cep && window.cep.process;
+            if (!CEP || !Pr) return null;
+            var r = Pr.createProcess(extDir() + "/bin/ukdrag.exe", "carry"), pid = r && r.data;
+            if (!pid || r.err) return null;
+            var done = false, buf = "", send = function (t) { try { Pr.stdin(pid, t + "\n"); } catch (e) { } };
+            document.documentElement.style.cursor = tile.style.cursor = dragIcon();
+            send("ok");
+            var finish = function () { done = true; send("quit"); document.documentElement.style.cursor = ""; tile.style.cursor = ""; };
+            var api = { drop: function () { if (done) return; finish(); st.sel = p.id; save(); apply(p.id); }, cancel: function () { if (!done) finish(); } };
+            var read = function () {
+                Pr.stdout(pid, function (out) {
+                    buf += out;
+                    var parts = buf.split(/\r?\n/); buf = parts.pop();
+                    parts.forEach(function (ln) { if (done || !ln) return; if (ln === "up") api.drop(); else if (ln === "esc") api.cancel(); else send("ok"); });
+                    if (!done) setTimeout(read, 0);
+                });
+            };
+            read();
+            return api;
+        };
+        view.appendChild(section("Format", h("div", { class: "card" },
+            row("Preview", seg([["comp", "Comp"], ["wide", "16:9"], ["tall", "9:16"], ["square", "1:1"]], st.fmt, function (v) { st.fmt = v; shape(); upd(); })))));
+        view.appendChild(section("Graphics", lib));
+        view.appendChild(section("Text", textBox));
+        view.appendChild(section("Colors", h("div", { class: "card" }, chips, roles)));
+        view.appendChild(section("Motion", h("div", { class: "card" },
+            row("Speed", slider(0.5, 2, 0.05, st.speed, "x", function (v) { st.speed = v; upd(); })),
+            row("Light speed", slider(0.25, 3, 0.05, st.light, "x", function (v) { st.light = v; upd(); })),
+            row("Length", slider(0, 20, 0.5, st.dur || 0, "s", function (v) { st.dur = v; upd(); }, "Auto")),
+            row("Overlay", seg([["auto", "Auto"], ["dots", "Dots"], ["grid", "Grid"], ["lines", "Lines"], ["none", "None"]], st.overlay, function (v) { st.overlay = v; upd(); lib.rebuild(); })),
+            row("Edge glow", toggle(st.edge, function (v) { st.edge = v; upd(); lib.rebuild(); })))));
+        buildTexts(); buildPals();
+        player.start();
+        btnApply.onclick = applyWith(cat, st, function () { apply(); });
     }
 
     /* ------------------------------------------------------ auto captions */

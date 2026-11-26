@@ -255,3 +255,20 @@ input[type=password]:focus { border-color: var(--line-3); box-shadow: 0 0 0 3px 
 .acflag.on { background: var(--surface-3); color: var(--text); border-color: var(--line-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 .accell { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .accell input[type=number] { width: 64px; }
+
+/* graphics: palette chips (select, x delete, + add) and the selected palette's colours */
+.gfxchips { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; padding: 6px 0 8px; }
+.gfxchip { position: relative; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 7px; cursor: pointer; background: var(--bg-deep); }
+.gfxchip:hover { border-color: var(--line-3); }
+.gfxchip.on { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(255, 255, 255, .08); }
+.gfxchip.add { display: grid; place-items: center; color: var(--muted); min-height: 44px; }
+.gfxchip.add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.gfxdots { display: flex; gap: 3px; }
+.gfxdots span { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .15); }
+.gfxpn { font-size: 10.5px; color: var(--text-2); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gfxdel { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border: 0; border-radius: 5px; padding: 0; display: grid; place-items: center; background: rgba(10, 10, 12, .6); cursor: pointer; opacity: 0; }
+.gfxdel svg { width: 11px; height: 11px; fill: none; stroke: #e9e9ee; stroke-width: 2; }
+.gfxchip:hover .gfxdel { opacity: 1; }
+.gfxroles { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px 10px; padding: 8px 0 6px; border-top: 1px solid var(--line); }
+.gfxrole { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+.gfxname { grid-column: 1 / -1; }
