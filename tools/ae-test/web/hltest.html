@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>hl test</title>
+<style>body{background:#111;color:#ccc;font:12px sans-serif;margin:8px} canvas{width:320px;height:180px;display:inline-block;margin:2px}</style></head>
+<body><div id="s"></div>
+<script src="/uk/shared/highlight.js"></script>
+<script src="/uk/js/hlprev.js"></script>
+<script>
+// window.sheet(t, mode, bg, name): every look at time t on one sheet (5 x 6, labelled), saved as out/hlref/<name>.jpg
+// window.strip(id, times, mode, bg, name): one look at several times in a row
+function opts(L, mode, bg) { return { id: L.id, colors: { box: L.box, accent: L.accent || "#FFFFFF", ink: L.ink || "#FFFFFF" }, dIn: 0.6, dOut: 0.45, mode: mode || "both", pad: 100, round: null, reveal: true, ink: true, bg: bg || "auto", maxW: 640, word: window.WORD || "Highlight" }; }
+function save(name, cv) { return fetch("/save/" + name, { method: "POST", body: cv.toDataURL("image/jpeg", 0.9) }); }
+function tile(L, t, mode, bg) { var c = document.createElement("canvas"); c.style.width = "320px"; c.style.height = "180px"; document.body.appendChild(c); UKHLPrev.draw(c, t, opts(L, mode, bg)); return c; }
+window.sheet = async function (t, mode, bg, name, ids) {
+    var list = ids ? UK_HL.LOOKS.filter(function (l) { return ids.indexOf(l.id) >= 0; }) : UK_HL.LOOKS, cols = 5, W = 320, H = 180;
+    var sh = document.createElement("canvas"); sh.width = W * cols; sh.height = (H + 16) * Math.ceil(list.length / cols); var g = sh.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, sh.width, sh.height);
+    list.forEach(function (L, i) {
+        var c = tile(L, t, mode, bg); g.drawImage(c, (i % cols) * W, Math.floor(i / cols) * (H + 16), W, H); c.remove();
+        g.fillStyle = "#ff0"; g.font = "12px sans-serif"; g.fillText(L.id + " " + L.name + "  t=" + t.toFixed(2), (i % cols) * W + 4, Math.floor(i / cols) * (H + 16) + H + 12);
+    });
+    await save((name || "hl_sheet") + ".jpg", sh);
+    return list.length;
+};
+window.strip = async function (id, times, mode, bg, name) {
+    var L = UK_HL.find(id), W = 320, H = 180, cols = Math.min(6, times.length);
+    var sh = document.createElement("canvas"); sh.width = W * cols; sh.height = (H + 16) * Math.ceil(times.length / cols); var g = sh.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, sh.width, sh.height);
+    times.forEach(function (t, i) {
+        var c = tile(L, t, mode, bg); g.drawImage(c, (i % cols) * W, Math.floor(i / cols) * (H + 16), W, H); c.remove();
+        g.fillStyle = "#ff0"; g.font = "12px sans-serif"; g.fillText(id + " t=" + t.toFixed(2), (i % cols) * W + 4, Math.floor(i / cols) * (H + 16) + H + 12);
+    });
+    await save((name || ("strip_" + id)) + ".jpg", sh);
+    return times.length;
+};
+document.getElementById("s").textContent = "looks: " + UK_HL.LOOKS.length;
+</script></body></html>

@@ -1,0 +1,2 @@
+// test comp WR_liquid only: quarter resolution like the user's Comp 1, render 5.5 s and 3 s.
+for(var i=1;i<=app.project.numItems;i++){var c=app.project.item(i); if(c instanceof CompItem && c.name=="WR_liquid"){ c.resolutionFactor=[4,4]; c.saveFrameToPng(5.5,new File("D:/Projects/Codex/tools/ae-test/out/liquid/q550.png")); c.saveFrameToPng(3,new File("D:/Projects/Codex/tools/ae-test/out/liquid/q300.png")); }}

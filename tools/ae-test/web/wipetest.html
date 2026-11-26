@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>wipe test</title>
+<style>body{background:#111;color:#ccc;font:12px sans-serif;margin:8px} canvas{width:1920px;height:1080px;display:block}</style></head>
+<body><div id="s"></div>
+<script src="/uk/shared/depth.js"></script>
+<script src="/uk/js/depthprev.js"></script>
+<script src="/uk/js/wipeprev.js"></script>
+<script>
+// window.scene(): the preview's picture at 1920 x 1080 as out/hlref/wr_scene.png (the AE test uses the same picture)
+// window.frames(times, o, tag): the preview at those times, at 1920 x 1080, as out/hlref/<tag>_<t * 100>.png
+function save(name, cv, type) { return fetch("/save/" + name, { method: "POST", body: cv.toDataURL(type || "image/png") }); }
+window.scene = async function () {
+    var S = UKDepthPrev.scene(), W = UKDepthPrev.IW, H = UKDepthPrev.IH, a = document.createElement("canvas"), i;
+    a.width = W; a.height = H;
+    var g = a.getContext("2d"), im = g.createImageData(W, H);
+    for (i = 0; i < W * H; i++) { im.data[i * 4] = S.rgb[i * 3]; im.data[i * 4 + 1] = S.rgb[i * 3 + 1]; im.data[i * 4 + 2] = S.rgb[i * 3 + 2]; im.data[i * 4 + 3] = 255; }
+    g.putImageData(im, 0, 0);
+    var b = document.createElement("canvas"); b.width = 1920; b.height = 1080;
+    var q = b.getContext("2d"); q.imageSmoothingEnabled = true; q.imageSmoothingQuality = "high"; q.drawImage(a, 0, 0, 1920, 1080);
+    await save("wr_scene.png", b);
+    return "saved";
+};
+window.frames = async function (times, o, tag) {
+    var c = document.createElement("canvas"); document.body.appendChild(c);
+    for (var i = 0; i < times.length; i++) {
+        var p = {}; for (var k in o) p[k] = o[k];
+        p.maxW = 1920; UKWipePrev.draw(c, times[i], p);
+        await save((tag || "pv") + "_" + Math.round(times[i] * 100) + ".png", c);
+    }
+    c.remove();
+    return times.length;
+};
+</script></body></html>

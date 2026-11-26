@@ -1,0 +1,170 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>p2s test</title>
+<style>body{background:#111;color:#ccc;font:12px sans-serif;margin:8px}</style></head>
+<body><div id="s"></div>
+<script src="/uk/shared/pathsimp.js"></script>
+<script src="/uk/js/trace.js"></script>
+<script>
+// Photo to Shape tests: synthetic images (window.IMGS), traced with UKTrace; window.sheet(names, opts, file) draws
+// original | trace (fills) | trace (outlines + points) per image, with counts, saved to out/hlref/<file>.jpg
+function star(g, cx, cy, R, r, n) { g.beginPath(); for (var i = 0; i < n * 2; i++) { var a = -Math.PI / 2 + i * Math.PI / n, q = i % 2 ? r : R; g.lineTo(cx + Math.cos(a) * q, cy + Math.sin(a) * q); } g.closePath(); }
+function mk(w, h, f) { var c = document.createElement("canvas"); c.width = w; c.height = h; f(c.getContext("2d"), w, h); return c; }
+window.IMGS = {
+    logo: mk(420, 300, function (g) {
+        g.fillStyle = "#E63946"; g.beginPath(); g.arc(140, 150, 110, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = "#111111"; g.lineWidth = 7; g.beginPath(); g.arc(140, 150, 122, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = "#FFFFFF"; star(g, 140, 155, 70, 30, 5); g.fill();
+        g.fillStyle = "#1D3557"; g.beginPath(); g.roundRect(270, 50, 135, 200, 26); g.fill();
+        g.fillStyle = "#FFC300"; g.font = "900 92px Arial"; g.textAlign = "center"; g.fillText("UK", 338, 185);
+    }),
+    small: mk(48, 48, function (g) {
+        g.fillStyle = "#2BB673"; g.beginPath(); g.moveTo(24, 4); g.bezierCurveTo(44, 10, 44, 30, 24, 40); g.bezierCurveTo(4, 30, 4, 10, 24, 4); g.fill();
+        g.strokeStyle = "#6B4226"; g.lineWidth = 3; g.beginPath(); g.moveTo(24, 12); g.lineTo(24, 46); g.stroke();
+    }),
+    scene: mk(500, 360, function (g, w, h) {
+        g.fillStyle = "#CFE8FF"; g.fillRect(0, 0, w, h);
+        g.fillStyle = "#FFD23F"; g.beginPath(); g.arc(390, 90, 46, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#3D5A80"; g.beginPath(); g.moveTo(0, 300); g.lineTo(140, 120); g.lineTo(260, 300); g.fill();
+        g.fillStyle = "#293241"; g.beginPath(); g.moveTo(150, 300); g.lineTo(300, 90); g.lineTo(470, 300); g.fill();
+        g.fillStyle = "#FFFFFF"; g.beginPath(); g.moveTo(300, 90); g.lineTo(336, 140); g.lineTo(312, 132); g.lineTo(296, 146); g.lineTo(270, 132); g.closePath(); g.fill();
+        g.fillStyle = "#57A773"; g.beginPath(); g.moveTo(0, 280); g.bezierCurveTo(120, 250, 260, 330, 500, 270); g.lineTo(500, 360); g.lineTo(0, 360); g.fill();
+        g.fillStyle = "#FFFFFF"; g.beginPath(); g.ellipse(110, 70, 50, 18, 0, 0, Math.PI * 2); g.ellipse(150, 60, 34, 22, 0, 0, Math.PI * 2); g.fill();
+    }),
+    grad: mk(300, 300, function (g) {
+        var gr = g.createRadialGradient(130, 120, 10, 150, 150, 150); gr.addColorStop(0, "#FFE29A"); gr.addColorStop(0.5, "#FF6B6B"); gr.addColorStop(1, "#4D1C5A");
+        g.fillStyle = gr; g.beginPath(); g.arc(150, 150, 140, 0, Math.PI * 2); g.fill();
+    }),
+    type: mk(520, 200, function (g) {
+        g.fillStyle = "#0B132B"; g.font = "italic 900 120px Georgia"; g.fillText("Sg&", 20, 140);
+        g.fillStyle = "#FF5A5F"; g.beginPath(); g.ellipse(430, 100, 70, 50, 0.4, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#FFFFFF"; g.beginPath(); g.ellipse(430, 100, 34, 20, 0.4, 0, Math.PI * 2); g.fill();
+    })
+};
+function drawPaths(g, res, k, outline) {
+    res.colors.forEach(function (c) {
+        var P = new Path2D();
+        c.paths.forEach(function (p) {
+            var n = p.v.length; P.moveTo(p.v[0][0] * k, p.v[0][1] * k);
+            for (var j = 0; j < n; j++) { var j1 = (j + 1) % n; P.bezierCurveTo((p.v[j][0] + p.o[j][0]) * k, (p.v[j][1] + p.o[j][1]) * k, (p.v[j1][0] + p.i[j1][0]) * k, (p.v[j1][1] + p.i[j1][1]) * k, p.v[j1][0] * k, p.v[j1][1] * k); }
+            P.closePath();
+        });
+        if (!outline) { g.fillStyle = c.hex; g.fill(P, "evenodd"); }
+        else { g.strokeStyle = "#00E5FF"; g.lineWidth = 1; g.stroke(P); c.paths.forEach(function (p) { p.v.forEach(function (v) { g.fillStyle = "#FF2D55"; g.fillRect(v[0] * k - 2, v[1] * k - 2, 4, 4); }); }); }
+    });
+}
+window.sheet = async function (names, o, file, cell) {
+    cell = cell || 360;
+    var rows = names.length, sh = document.createElement("canvas"); sh.width = cell * 3; sh.height = (cell + 20) * rows;
+    var g = sh.getContext("2d"); g.fillStyle = "#222"; g.fillRect(0, 0, sh.width, sh.height);
+    var info = [];
+    for (var r = 0; r < rows; r++) {
+        var im = IMGS[names[r]], R = UKTrace.prepare(im), res = UKTrace.run(R, o || {}), k = Math.min(cell / im.width, cell / im.height) * 0.95, y0 = r * (cell + 20);
+        for (var col = 0; col < 3; col++) {
+            g.save(); g.translate(col * cell + 4, y0 + 4);
+            g.fillStyle = (col === 1) ? "#2a2a2a" : "#333"; g.fillRect(-4, -4, cell, cell);
+            g.fillStyle = "#555"; for (var cy = 0; cy < cell; cy += 16) for (var cx = (cy / 16) % 2 * 16; cx < cell; cx += 32) g.fillRect(cx - 4, cy - 4, 16, 16);
+            if (col === 0) g.drawImage(im, 0, 0, im.width * k, im.height * k);
+            else if (col === 1) drawPaths(g, res, k, false);
+            else { g.globalAlpha = 0.35; g.drawImage(im, 0, 0, im.width * k, im.height * k); g.globalAlpha = 1; drawPaths(g, res, k, true); }
+            g.restore();
+        }
+        var line = names[r] + ": " + res.colors.length + " colors [" + res.colors.map(function (c) { return c.hex + "/" + c.paths.length; }).join(" ") + "]  paths " + res.paths + "  points " + res.points + "  " + res.ms + " ms  (work " + R.w + "x" + R.h + ", s " + R.s.toFixed(2) + ")";
+        g.fillStyle = "#ff0"; g.font = "13px sans-serif"; g.fillText(line, 6, y0 + cell + 14);
+        info.push(line);
+    }
+    await fetch("/save/" + (file || "p2s") + ".jpg", { method: "POST", body: sh.toDataURL("image/jpeg", 0.92) });
+    return info.join("\n");
+};
+// window.zoom(name, o, file, k, crop): the image k times, the trace outlined over it with its points (big), then the
+// difference: the trace rendered against the original (pixels whose colour differs by more than 60: red)
+window.zoom = async function (name, o, file, k, crop) {
+    var im = IMGS[name], R = UKTrace.prepare(im), res = UKTrace.run(R, o || {}), c = crop || [0, 0, im.width, im.height];
+    var W = Math.round(c[2] * k), H = Math.round(c[3] * k), sh = document.createElement("canvas"); sh.width = W; sh.height = H * 2 + 24;
+    var g = sh.getContext("2d"); g.fillStyle = "#333"; g.fillRect(0, 0, sh.width, sh.height);
+    g.save(); g.translate(-c[0] * k, -c[1] * k); g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0, im.width * k, im.height * k);
+    res.colors.forEach(function (cc) { cc.paths.forEach(function (p) {
+        var n = p.v.length, P = new Path2D(); P.moveTo(p.v[0][0] * k, p.v[0][1] * k);
+        for (var j = 0; j < n; j++) { var j1 = (j + 1) % n; P.bezierCurveTo((p.v[j][0] + p.o[j][0]) * k, (p.v[j][1] + p.o[j][1]) * k, (p.v[j1][0] + p.i[j1][0]) * k, (p.v[j1][1] + p.i[j1][1]) * k, p.v[j1][0] * k, p.v[j1][1] * k); }
+        P.closePath(); g.strokeStyle = "#00E5FF"; g.lineWidth = 1.2; g.stroke(P);
+        for (j = 0; j < n; j++) { var v = p.v[j]; g.strokeStyle = "rgba(255,255,255,0.7)"; g.beginPath(); g.moveTo(v[0] * k, v[1] * k); g.lineTo((v[0] + p.o[j][0]) * k, (v[1] + p.o[j][1]) * k); g.moveTo(v[0] * k, v[1] * k); g.lineTo((v[0] + p.i[j][0]) * k, (v[1] + p.i[j][1]) * k); g.stroke(); g.fillStyle = "#FF2D55"; g.fillRect(v[0] * k - 3, v[1] * k - 3, 6, 6); }
+    }); });
+    g.restore();
+    /* the difference at k x: the trace drawn alone vs the original drawn alone */
+    var a = document.createElement("canvas"); a.width = im.width * 2; a.height = im.height * 2; var ga = a.getContext("2d"); ga.drawImage(im, 0, 0, a.width, a.height);
+    var b = document.createElement("canvas"); b.width = a.width; b.height = a.height; var gb = b.getContext("2d");
+    res.colors.forEach(function (cc) { var P = new Path2D(); cc.paths.forEach(function (p) { var n = p.v.length; P.moveTo(p.v[0][0] * 2, p.v[0][1] * 2); for (var j = 0; j < n; j++) { var j1 = (j + 1) % n; P.bezierCurveTo((p.v[j][0] + p.o[j][0]) * 2, (p.v[j][1] + p.o[j][1]) * 2, (p.v[j1][0] + p.i[j1][0]) * 2, (p.v[j1][1] + p.i[j1][1]) * 2, p.v[j1][0] * 2, p.v[j1][1] * 2); } P.closePath(); }); gb.fillStyle = cc.hex; gb.fill(P, "evenodd"); });
+    var da = ga.getImageData(0, 0, a.width, a.height).data, db = gb.getImageData(0, 0, a.width, a.height).data, out = ga.createImageData(a.width, a.height), bad = 0, tot = 0;
+    for (var q = 0; q < a.width * a.height; q++) {
+        var o4 = q * 4, A1 = da[o4 + 3] > 127, B1 = db[o4 + 3] > 127, diff = A1 !== B1 || (A1 && (Math.abs(da[o4] - db[o4]) + Math.abs(da[o4 + 1] - db[o4 + 1]) + Math.abs(da[o4 + 2] - db[o4 + 2]) > 60));
+        if (A1) tot++;
+        if (diff) { bad++; out.data[o4] = 255; out.data[o4 + 1] = 40; out.data[o4 + 2] = 60; out.data[o4 + 3] = 255; }
+        else if (A1) { out.data[o4] = da[o4] * 0.35; out.data[o4 + 1] = da[o4 + 1] * 0.35; out.data[o4 + 2] = da[o4 + 2] * 0.35; out.data[o4 + 3] = 255; }
+    }
+    ga.putImageData(out, 0, 0);
+    g.imageSmoothingEnabled = false; g.drawImage(a, c[0] * 2, c[1] * 2, c[2] * 2, c[3] * 2, 0, H + 24, W, H);
+    var line = name + ": " + res.colors.length + " colors, " + res.paths + " paths, " + res.points + " points, wrong " + (100 * bad / Math.max(1, tot)).toFixed(2) + "% (AA edges count too)";
+    g.fillStyle = "#ff0"; g.font = "14px sans-serif"; g.fillText(line, 6, H + 17);
+    await fetch("/save/" + (file || "p2s_zoom") + ".jpg", { method: "POST", body: sh.toDataURL("image/jpeg", 0.92) });
+    return line;
+};
+/* a real image (a file copied next to this page), traced once per set of options */
+window.loadSrc = async function (url, name) { var im = new Image(); im.src = url; await im.decode(); IMGS[name] = im; return im.naturalWidth + "x" + im.naturalHeight; };
+function pathOf(p, k, ox, oy) {
+    var n = p.v.length, P = new Path2D(), X = function (v) { return (v - ox) * k; }, Y = function (v) { return (v - oy) * k; };
+    P.moveTo(X(p.v[0][0]), Y(p.v[0][1]));
+    for (var j = 0; j < n; j++) { var j1 = (j + 1) % n; P.bezierCurveTo(X(p.v[j][0] + p.o[j][0]), Y(p.v[j][1] + p.o[j][1]), X(p.v[j1][0] + p.i[j1][0]), Y(p.v[j1][1] + p.i[j1][1]), X(p.v[j1][0]), Y(p.v[j1][1])); }
+    P.closePath(); return P;
+}
+/* how wavy: along every curve, the number of bends that change side per 100 px of outline (a clean curve: close to 0) */
+window.wobble = function (res) {
+    var flips = 0, length = 0, turnSum = 0;
+    res.colors.forEach(function (c) { c.paths.forEach(function (p) {
+        var n = p.v.length, pts = [], j, q;
+        for (j = 0; j < n; j++) {
+            var j1 = (j + 1) % n, a = p.v[j], b = [a[0] + p.o[j][0], a[1] + p.o[j][1]], d = p.v[j1], e = [d[0] + p.i[j1][0], d[1] + p.i[j1][1]];
+            var L = Math.hypot(d[0] - a[0], d[1] - a[1]), m = Math.max(2, Math.ceil(L));
+            for (q = 0; q < m; q++) { var t = q / m, u = 1 - t; pts.push([u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * e[0] + t * t * t * d[0], u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * e[1] + t * t * t * d[1]]); }
+        }
+        var N = pts.length, last = 0, W = 3;
+        for (j = 0; j < N; j++) {
+            var A = pts[(j - W + N) % N], B = pts[j], C = pts[(j + W) % N], x1 = B[0] - A[0], y1 = B[1] - A[1], x2 = C[0] - B[0], y2 = C[1] - B[1];
+            var cr = x1 * y2 - y1 * x2, an = Math.atan2(cr, x1 * x2 + y1 * y2);
+            length += Math.hypot(x2, y2) / W; turnSum += Math.abs(an) / W;
+            if (Math.abs(an) > 0.012) { var s = an > 0 ? 1 : -1; if (last && s !== last) flips++; last = s; }
+        }
+    }); });
+    return { flipsPer100px: Math.round(flips / Math.max(1, length) * 10000) / 100, turnPer100px: Math.round(turnSum / Math.max(1, length) * 10000) / 100, length: Math.round(length) };
+};
+/* the shapes rendered against the image, by pixels: what share of the image differs (colour or coverage), and the seams (image opaque, no shape) */
+window.fidelity = function (name, res, sc) {
+    var im = IMGS[name], W = (im.naturalWidth || im.width) * sc, H = (im.naturalHeight || im.height) * sc;
+    var a = document.createElement("canvas"); a.width = W; a.height = H; var ga = a.getContext("2d", { willReadFrequently: true }); ga.imageSmoothingQuality = "high"; ga.drawImage(im, 0, 0, W, H);
+    var b = document.createElement("canvas"); b.width = W; b.height = H; var gb = b.getContext("2d", { willReadFrequently: true });
+    res.colors.forEach(function (c) { var P = new Path2D(); c.paths.forEach(function (p) { P.addPath(pathOf(p, sc, 0, 0)); }); gb.fillStyle = c.hex; gb.fill(P, "evenodd"); });
+    var da = ga.getImageData(0, 0, W, H).data, db = gb.getImageData(0, 0, W, H).data, bad = 0, tot = 0, seam = 0;
+    for (var i = 0; i < W * H; i++) {
+        var o = i * 4; if (da[o + 3] > 127) tot++;
+        if (da[o + 3] > 250 && db[o + 3] < 40) seam++;
+        if ((da[o + 3] > 127) !== (db[o + 3] > 127) || (da[o + 3] > 127 && Math.abs(da[o] - db[o]) + Math.abs(da[o + 1] - db[o + 1]) + Math.abs(da[o + 2] - db[o + 2]) > 90)) bad++;
+    }
+    return { wrongPct: Math.round(bad / Math.max(1, tot) * 100000) / 1000, seamPx: seam };
+};
+var cache = {};
+function traced(name, o) { var R = cache[name] || (cache[name] = UKTrace.prepare(IMGS[name])); return UKTrace.run(R, o || {}); }
+/* as the user sees it in AE: k x, the fills on black, each path a thin pale line, the points if asked; crop in source px; beside it the source */
+window.view = async function (name, o, file, k, crop, points) {
+    var res = traced(name, o), c = crop, W = Math.round(c[2] * k), H = Math.round(c[3] * k), sh = document.createElement("canvas"); sh.width = W; sh.height = H * 2 + 8;
+    var g = sh.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, W, sh.height);
+    g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip();
+    res.colors.forEach(function (cc) {
+        var P = new Path2D(); cc.paths.forEach(function (p) { P.addPath(pathOf(p, k, c[0], c[1])); });
+        g.fillStyle = cc.hex; g.fill(P, "evenodd"); g.strokeStyle = "rgba(235,235,255,0.75)"; g.lineWidth = 1; g.stroke(P);
+    });
+    if (points) res.colors.forEach(function (cc) { cc.paths.forEach(function (p) { p.v.forEach(function (v) { g.fillStyle = "#FF2D55"; g.fillRect((v[0] - c[0]) * k - 3, (v[1] - c[1]) * k - 3, 6, 6); }); }); });
+    g.restore();
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high"; g.drawImage(IMGS[name], c[0], c[1], c[2], c[3], 0, H + 8, W, H);
+    await fetch("/save/" + file + ".jpg", { method: "POST", body: sh.toDataURL("image/jpeg", 0.92) });
+    return JSON.stringify({ colors: res.colors.length, paths: res.paths, points: res.points, ms: res.ms, t: res.t, wob: wobble(res), fid: fidelity(name, res, 2) });
+};
+document.getElementById("s").textContent = "ready";
+</script></body></html>

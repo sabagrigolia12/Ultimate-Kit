@@ -1,0 +1,18 @@
+﻿var f = new File("D:/Projects/Codex/tools/ae-test/out/dd2.txt"); f.open("w");
+for (var i = 1; i <= app.project.numItems; i++) f.writeln("item: " + app.project.item(i).name + " [" + app.project.item(i).typeName + "]");
+var c = null; for (i = 1; i <= app.project.numItems; i++) if (app.project.item(i).name === "ST_st15") c = app.project.item(i);
+var L = c.layer(1);
+var E = L.property("ADBE Effect Parade");
+for (var k = 1; k <= E.numProperties; k++) f.writeln("fx " + k + ": " + String(E.property(k).name));
+var tx = L.property("ADBE Text Properties").property("ADBE Text Document");
+f.writeln("err: '" + tx.expressionError + "'");
+f.writeln("t=0.5: " + tx.valueAtTime(0.5, false).text);
+f.writeln("t=2.5: " + tx.valueAtTime(2.5, false).text);
+f.writeln("currency value: " + E.property("UK Currency").property(1).value);
+L.effect("UK Count To")(1).setValue(200);
+var s = ""; for (var q = 0.3; q <= 2.6; q += 0.2) s += tx.valueAtTime(q, false).text + " ";
+f.writeln("count to 200: " + s);
+L.effect("UK Currency")(1).setValue(5); L.effect("UK Plus")(1).setValue(0);
+f.writeln("GEL no plus: " + tx.valueAtTime(2.5, false).text);
+L.effect("UK Count To")(1).setValue(110000); L.effect("UK Currency")(1).setValue(2); L.effect("UK Plus")(1).setValue(1);
+f.close();

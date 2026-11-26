@@ -1,0 +1,1 @@
+﻿var p = app.project; var mine = p.file === null; for (var i = 1; i <= p.numItems; i++) { var n = p.item(i).name; if (!/^(Install Check|Ultimate Kit|Backgrounds|BG Cinematic|Solids|Black)/.test(n)) mine = false; } if (!mine) throw new Error('not my project'); p.close(CloseOptions.DO_NOT_SAVE_CHANGES); app.newProject();

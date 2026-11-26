@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ultimate-kit-panel",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "D:/Projects/Codex/tools/serve.ps1", "-Port", "8765"],
+      "port": 8765
+    },
+    {
+      "name": "vidframes",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "D:/Projects/Codex/tools/ae-test/vidserve.ps1", "-Port", "8767"],
+      "port": 8767
+    },
+    {
+      "name": "sb-sink",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "D:/Projects/Codex/tools/sink.ps1", "-Port", "8766"],
+      "port": 8766
+    }
+  ]
+}

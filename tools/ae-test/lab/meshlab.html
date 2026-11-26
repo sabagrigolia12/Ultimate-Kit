@@ -1,0 +1,303 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>SaaS BG mesh lab</title>
+<style>body{margin:0;background:#333;color:#ddd;font:12px sans-serif}#g{display:grid;gap:3px;padding:2px;width:calc(100vw - 8px)}#g canvas{width:100%;display:block}.w{position:relative}.l{position:absolute;left:3px;top:2px;color:#fff;background:#000a;padding:0 3px;font:11px sans-serif}</style>
+<script src="/uk/shared/catalog.js"></script>
+<script src="/uk/shared/saasbg_mesh.js"></script>
+<script src="/uk/shared/saasbg_blobs.js"></script>
+<script src="/uk/shared/saasbg.js"></script>
+<script src="/uk/js/saasbg.js"></script>
+<script src="pk.js"></script>
+<script src="blobs.js"></script>
+</head><body><div id="g"></div>
+<script>
+/* Lab for the SaaS BG category: reference frames from the Envato previews, text-aware 32 x 18 meshes,
+   panel-preview comparison, and POST of results to the local sink (tools/sink.ps1). */
+window.__base = "https://public-assets.content-platform.envatousercontent.com/";
+window.__VC = {};
+window.__REF = UK_CAT.saasBg.map(s => [s.id, s.ref[0], s.ref[1]]);
+window.__SP = {}; UK_CAT.saasBg.forEach(s => __SP[s.id] = s);
+window.__vid = function (path) {
+  return new Promise(function (res, rej) {
+    var v = document.createElement('video'); v.muted = true; v.preload = 'auto';
+    v.src = '/v/' + path;   // proxied by tools/sink.ps1 (same origin)
+    v.onloadeddata = function () { res(v); }; v.onerror = function () { rej('load error'); };
+    setTimeout(function () { rej('timeout'); }, 90000);
+  });
+};
+window.__seek1 = function (v, t) { return new Promise(function (r) { v.onseeked = function () { r(true); }; v.currentTime = t; setTimeout(function () { r(false); }, 8000); }); };
+/* a seek that really landed (a stale frame would silently copy the previous background) */
+window.__seek = async function (v, t) {
+  for (let k = 0; k < 4; k++) {
+    if (await __seek1(v, t) && Math.abs(v.currentTime - t) < 0.06 && v.readyState >= 2) return;
+    if (k === 1) { v.currentTime = Math.max(0, t - 1); await new Promise(r => setTimeout(r, 500)); }
+  }
+  throw new Error('seek failed ' + t);
+};
+window.__getV = async function (pack) { return __VC[pack] || (__VC[pack] = await __vid(__PK[pack])); };
+window.__sink = async function (name, text) { const r = await fetch('/' + name, { method: 'POST', body: text }); return r.text(); };
+window.__grid = function (cols) { const o = document.getElementById('g'); o.innerHTML = ''; o.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)'; return o; };
+window.__cell = function (o, cv, label) { const w = document.createElement('div'); w.className = 'w'; w.appendChild(cv); if (label) { const l = document.createElement('div'); l.className = 'l'; l.textContent = label; w.appendChild(l); } o.appendChild(w); return w; };
+window.__frame = async function (pack, t, W, H) {
+  const v = await __getV(pack); await __seek(v, Math.max(0.05, Math.min(v.duration - 0.05, t)));
+  const c = document.createElement('canvas'); c.width = W || 480; c.height = H || 270; c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c;
+};
+/* reference frames only */
+window.__refList = async function (ids, cols, dt) {
+  const o = __grid(cols || 4);
+  for (const id of ids) { const r = __REF.find(x => x[0] === id); __cell(o, await __frame(r[1], r[2] + (dt || 0)), id); }
+  return ids.length;
+};
+/* reference | panel preview (at time t of the loop) */
+window.__cmp = async function (ids, cols, t) {
+  const o = __grid(cols || 2);
+  for (const id of ids) {
+    const r = __REF.find(x => x[0] === id); __cell(o, await __frame(r[1], r[2]), id + ' ref');
+    const c = document.createElement('canvas'); __cell(o, c, id + ' preview');
+    UKSaas.draw(c, __SP[id], t === undefined ? 4 : t, { maxW: 480 });
+  }
+  return ids.length;
+};
+/* per-cell colour of one frame: mean of the pixels that are not text (fine local contrast) */
+window.__cellsT = async function (pack, t, opt) {
+  const C = opt.C, R = opt.R, S = opt.S || 8, w = C * S, h = R * S, v = await __getV(pack);
+  await __seek(v, Math.max(0.05, Math.min(v.duration - 0.05, t)));
+  const m = document.createElement('canvas'); m.width = w; m.height = h; const mg = m.getContext('2d', { willReadFrequently: true }); mg.imageSmoothingQuality = 'high'; mg.drawImage(v, 0, 0, w, h);
+  const d = mg.getImageData(0, 0, w, h).data, L = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) L[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  const rr = opt.rr || 4, B = new Float32Array(w * h), T = new Uint8Array(w * h), I = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) { let s = 0; for (let x = 0; x < w; x++) { s += L[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + s; } }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const x0 = Math.max(0, x - rr), x1 = Math.min(w, x + rr + 1), y0 = Math.max(0, y - rr), y1 = Math.min(h, y + rr + 1);
+    B[y * w + x] = (I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+  }
+  const thr = opt.thr || 30;
+  if (opt.white) {
+    /* text = near-white, low-saturation pixels (titles over saturated glows) */
+    const wt = opt.white === true ? 175 : opt.white, ws = opt.wsat || 70;
+    for (let i = 0; i < w * h; i++) { const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2], mn = Math.min(r, g, b), mx = Math.max(r, g, b); if (mn > wt && mx - mn < ws) T[i] = 1; }
+  } else for (let i = 0; i < w * h; i++) if (Math.abs(L[i] - B[i]) > thr) T[i] = 1;
+  const dl = opt.dl === undefined ? 5 : opt.dl, T2 = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (T[y * w + x]) for (let yy = Math.max(0, y - dl); yy <= Math.min(h - 1, y + dl); yy++) for (let xx = Math.max(0, x - dl); xx <= Math.min(w - 1, x + dl); xx++) T2[yy * w + xx] = 1;
+  if (opt.noText) T2.fill(0);
+  /* keep / holes are given in cells of a 32 x 18 grid, whatever C x R is */
+  const fx = C / 32, fy = R / 18, px = (r, f) => [Math.floor(r[0] * fx * S), Math.floor(r[1] * fy * S), Math.min(w, Math.ceil((r[2] + 1) * fx * S)), Math.min(h, Math.ceil((r[3] + 1) * fy * S))];
+  for (const r0 of (opt.keep || [])) { const r = px(r0); for (let y = r[1]; y < r[3]; y++) for (let x = r[0]; x < r[2]; x++) T2[y * w + x] = 0; }
+  for (const r0 of (opt.holes || [])) { const r = px(r0); for (let y = r[1]; y < r[3]; y++) for (let x = r[0]; x < r[2]; x++) T2[y * w + x] = 1; }
+  const cells = [], frac = [];
+  for (let cy = 0; cy < R; cy++) for (let cx = 0; cx < C; cx++) {
+    const px = [];
+    for (let y = cy * S; y < (cy + 1) * S; y++) for (let x = cx * S; x < (cx + 1) * S; x++) { const k = y * w + x; if (!T2[k]) px.push(k); }
+    /* trimmed mean (middle half by luminance) so soft text shadows / glints do not tint the cell */
+    px.sort((a, b) => L[a] - L[b]);
+    const a0 = Math.floor(px.length * 0.25), a1 = Math.max(a0 + 1, Math.ceil(px.length * 0.75)); let s = [0, 0, 0], n = 0;
+    for (let q = a0; q < a1 && q < px.length; q++) { const k = px[q]; s[0] += d[k * 4]; s[1] += d[k * 4 + 1]; s[2] += d[k * 4 + 2]; n++; }
+    cells.push(n ? s.map(q => q / n) : null); frac.push(px.length / (S * S));
+  }
+  return { cells, frac, T: T2, w, h };
+};
+window.__palInit = function (cells, K) {
+  const lum = c => c[0] + c[1] + c[2], d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  const s = cells.slice().sort((a, b) => lum(a) - lum(b)); const pal = [s[0].slice()];
+  while (pal.length < K) { let best = null, bd = -1; for (const c of cells) { let m = 1e9; for (const p of pal) m = Math.min(m, d2(c, p)); if (m > bd) { bd = m; best = c; } } pal.push(best.slice()); }
+  return pal;
+};
+window.__fit = function (cells, K, pal) {
+  const lum = c => c[0] + c[1] + c[2];
+  for (let it = 0; it < 40; it++) {
+    const acc = pal.map(() => [0, 0, 0, 0]);
+    for (const c of cells) { let b = 0, bd = 1e9; pal.forEach((p, i) => { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < bd) { bd = d; b = i; } }); acc[b][0] += c[0]; acc[b][1] += c[1]; acc[b][2] += c[2]; acc[b][3]++; }
+    pal = pal.map((p, i) => acc[i][3] ? [acc[i][0] / acc[i][3], acc[i][1] / acc[i][3], acc[i][2] / acc[i][3]] : p);
+  }
+  pal.sort((a, b) => lum(a) - lum(b));
+  let enc = '', err = 0;
+  for (const c of cells) {
+    let best = [0, 0, 0], bd = 1e9;
+    for (let i = 0; i < K; i++) for (let j = i; j < K; j++) {
+      const a = pal[i], b = pal[j], ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2;
+      let tt = L2 ? ((c[0] - a[0]) * ab[0] + (c[1] - a[1]) * ab[1] + (c[2] - a[2]) * ab[2]) / L2 : 0; tt = Math.max(0, Math.min(1, tt));
+      const q = [a[0] + ab[0] * tt, a[1] + ab[1] * tt, a[2] + ab[2] * tt], d = (c[0] - q[0]) ** 2 + (c[1] - q[1]) ** 2 + (c[2] - q[2]) ** 2;
+      if (d < bd) { bd = d; best = [i, j, Math.round(tt * 99)]; }
+    }
+    err += Math.sqrt(bd / 3);
+    enc += best[0] + '' + best[1] + ('0' + best[2]).slice(-2);
+  }
+  const hex = c => '#' + c.map(x => ('0' + Math.max(0, Math.min(255, Math.round(x))).toString(16)).slice(-2)).join('');
+  return { pal: pal.map(hex), cells: enc, fitErr: +(err / cells.length).toFixed(1) };
+};
+window.__fitBest = function (cells, K) {
+  const lum = c => c[0] + c[1] + c[2];
+  const s = cells.slice().sort((a, b) => lum(a) - lum(b)), q = [];
+  for (let i = 0; i < K; i++) q.push(s[Math.round(i * (s.length - 1) / (K - 1))].slice());
+  const A = __fit(cells, K, q), B = __fit(cells, K, __palInit(cells, K));
+  return A.fitErr <= B.fitErr ? A : B;
+};
+window.__meshT = async function (pack, t, opt) {
+  opt = Object.assign({ C: 48, R: 27, offs: [-0.1, 0, 0.1], k: 'auto', maxK: 9, minFrac: 0.3 }, opt || {});
+  const C = opt.C, R = opt.R, per = [];
+  for (const o of opt.offs) per.push(await __cellsT(pack, t + o, opt));
+  /* drop neighbour frames that belong to another shot (cut near t) */
+  const c0 = per[Math.floor(per.length / 2)];
+  for (let q = per.length - 1; q >= 0; q--) {
+    if (per[q] === c0) continue; let s = 0, n = 0;
+    for (let i = 0; i < C * R; i++) if (per[q].cells[i] && c0.cells[i]) { s += Math.abs(per[q].cells[i][0] - c0.cells[i][0]) + Math.abs(per[q].cells[i][1] - c0.cells[i][1]) + Math.abs(per[q].cells[i][2] - c0.cells[i][2]); n++; }
+    if (!n || s / n / 3 > (opt.cut || 12)) per.splice(q, 1);
+  }
+  let cells = [], mask = [];
+  for (let i = 0; i < C * R; i++) {
+    const px = []; for (const f of per) if (f.cells[i] && f.frac[i] >= opt.minFrac) px.push(f.cells[i]);
+    if (!px.length) { cells.push([0, 0, 0]); mask.push(true); continue; }
+    px.sort((a, b) => (a[0] + a[1] + a[2]) - (b[0] + b[1] + b[2]));
+    cells.push(px[Math.floor(px.length / 2)]); mask.push(false);
+  }
+  /* text ghosts: cells next to text whose brightness jumps away from their clean neighbourhood */
+  const mid = c0, near = new Uint8Array(C * R), Lc = cells.map(c => (c[0] + c[1] + c[2]) / 3);
+  for (let i = 0; i < C * R; i++) if (mid.frac[i] < 0.92) { const x = i % C, y = (i / C) | 0; for (let yy = Math.max(0, y - 1); yy <= Math.min(R - 1, y + 1); yy++) for (let xx = Math.max(0, x - 1); xx <= Math.min(C - 1, x + 1); xx++) near[yy * C + xx] = 1; }
+  const gh = opt.ghost === undefined ? 14 : opt.ghost, extra = [];
+  if (gh) for (let i = 0; i < C * R; i++) {
+    if (mask[i] || !near[i]) continue;
+    const x = i % C, y = (i / C) | 0, nb = [];
+    for (let yy = Math.max(0, y - 5); yy <= Math.min(R - 1, y + 5); yy++) for (let xx = Math.max(0, x - 5); xx <= Math.min(C - 1, x + 5); xx++) { const k = yy * C + xx; if (!mask[k] && !near[k]) nb.push(Lc[k]); }
+    if (nb.length < 4) continue;
+    nb.sort((a, b) => a - b);
+    if (Math.abs(Lc[i] - nb[Math.floor(nb.length / 2)]) > gh) extra.push(i);
+  }
+  for (const i of extra) mask[i] = true;
+  /* closing: fill the inside of big letters (cells mostly surrounded by text cells) */
+  for (let pass = 0; pass < 3; pass++) {
+    const add = [];
+    for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+      const k = y * C + x; if (mask[k]) continue; let n = 0;
+      if (x > 0 && mask[k - 1]) n++; if (x < C - 1 && mask[k + 1]) n++; if (y > 0 && mask[k - C]) n++; if (y < R - 1 && mask[k + C]) n++;
+      if (n >= 3) add.push(k);
+    }
+    for (const k of add) mask[k] = true;
+  }
+  for (const r of (opt.keep || [])) for (let y = Math.floor(r[1] * R / 18); y < Math.ceil((r[3] + 1) * R / 18); y++) for (let x = Math.floor(r[0] * C / 32); x < Math.ceil((r[2] + 1) * C / 32); x++) mask[y * C + x] = false;
+  const nh = mask.filter(Boolean).length;
+  if (nh) for (let it = 0; it < 4000; it++) {
+    const nc = cells.map(c => c.slice());
+    for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+      const k = y * C + x; if (!mask[k]) continue;
+      let s = [0, 0, 0], n = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= C || yy >= R) continue; const q = cells[yy * C + xx]; s[0] += q[0]; s[1] += q[1]; s[2] += q[2]; n++; }
+      nc[k] = s.map(v => v / n);
+    }
+    cells = nc;
+  }
+  /* mild 3 x 3 smoothing (blotches / speckles from tiny per-cell differences); lighter for the crisp 96 x 54 meshes */
+  const sm = opt.smooth === undefined ? (C <= 48 ? 0.5 : 0.35) : opt.smooth;
+  for (let pass = 0; sm && pass < (opt.passes || 1); pass++) {
+    const nc = [];
+    for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+      let s = [0, 0, 0], n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = Math.max(0, Math.min(C - 1, x + dx)), yy = Math.max(0, Math.min(R - 1, y + dy)), wgt = (dx ? 1 : 2) * (dy ? 1 : 2), q = cells[yy * C + xx]; s[0] += q[0] * wgt; s[1] += q[1] * wgt; s[2] += q[2] * wgt; n += wgt; }
+      const c = cells[y * C + x]; nc.push([c[0] * (1 - sm) + s[0] / n * sm, c[1] * (1 - sm) + s[1] / n * sm, c[2] * (1 - sm) + s[2] / n * sm]);
+    }
+    cells = nc;
+  }
+  /* palette size: opt.k, or 'auto' = the fewest colours (5..maxK) that fit the frame closely */
+  let F;
+  if (opt.k === 'auto') { for (let K = 5; K <= (opt.maxK || 8); K++) { F = __fitBest(cells, K); if (F.fitErr <= (opt.errGoal || 2.5)) break; } }
+  else F = __fitBest(cells, opt.k);
+  return { pal: F.pal, cells: F.cells, c: C, r: R, fitErr: F.fitErr, holes: nh, mask: mask, T: c0, nf: per.length };
+};
+window.__meshDrawN = function (cv, M, blurFrac) {
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, C = M.c || 16, R = M.r || 9;
+  const pal = M.pal.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+  const t = document.createElement('canvas'); t.width = C + 2; t.height = R + 2; const tg = t.getContext('2d'); const id = tg.createImageData(C + 2, R + 2);
+  for (let y = -1; y <= R; y++) for (let x = -1; x <= C; x++) {
+    const cx = Math.max(0, Math.min(C - 1, x)), cy = Math.max(0, Math.min(R - 1, y)), k = (cy * C + cx) * 4, s = M.cells.substr(k, 4);
+    const i = +s[0], j = +s[1], tt = +s.substr(2) / 99, a = pal[i], b = pal[j], o = ((y + 1) * (C + 2) + (x + 1)) * 4;
+    id.data[o] = a[0] + (b[0] - a[0]) * tt; id.data[o + 1] = a[1] + (b[1] - a[1]) * tt; id.data[o + 2] = a[2] + (b[2] - a[2]) * tt; id.data[o + 3] = 255;
+  }
+  tg.putImageData(id, 0, 0);
+  const cw = W / C, ch = H / R;
+  g.save(); g.filter = 'blur(' + (blurFrac * W * 0.32) + 'px)'; g.imageSmoothingEnabled = false;
+  g.drawImage(t, -cw, -ch, W + 2 * cw, H + 2 * ch); g.restore();
+};
+/* reference | text mask | mesh, 3 columns; results kept in __MN */
+window.__MN = {};
+window.__reviewT = async function (list, blurFrac) {
+  const o = __grid(3);
+  for (const it of list) {
+    const [id, opt] = typeof it === 'string' ? [it, {}] : it, r = __REF.find(x => x[0] === id), pack = r[1], t = r[2] + ((opt && opt.dt) || 0);
+    const M = await __meshT(pack, t, opt); __MN[id] = M;
+    const ref = await __frame(pack, t, 320, 180), a = await __frame(pack, t, 320, 180);
+    const tm = document.createElement('canvas'); tm.width = M.T.w; tm.height = M.T.h; const tg = tm.getContext('2d'); const id2 = tg.createImageData(M.T.w, M.T.h);
+    for (let i = 0; i < M.T.w * M.T.h; i++) { const q = M.T.T[i] ? 255 : 0; id2.data[i * 4] = q; id2.data[i * 4 + 1] = q * 0.3; id2.data[i * 4 + 3] = M.T.T[i] ? 160 : 0; }
+    tg.putImageData(id2, 0, 0); const ag = a.getContext('2d'); ag.drawImage(tm, 0, 0, 320, 180);
+    ag.fillStyle = '#0ff'; for (let i = 0; i < M.mask.length; i++) if (M.mask[i]) ag.fillRect((i % M.c + 0.5) * 320 / M.c - 1, (((i / M.c) | 0) + 0.5) * 180 / M.r - 1, 2, 2);
+    const b = document.createElement('canvas'); b.width = 320; b.height = 180; __meshDrawN(b, M, (opt && opt.blur) || blurFrac || 0.035);
+    __cell(o, ref, id); __cell(o, a, 'mask'); __cell(o, b, 'e' + M.fitErr + ' h' + M.holes);
+  }
+  return list.length;
+};
+/* compact review: ref | mesh pairs, 3 pairs per row */
+window.__reviewQ = async function (list, blurFrac) {
+  const o = __grid(6);
+  for (const it of list) {
+    const [id, opt] = typeof it === 'string' ? [it, {}] : it, r = __REF.find(x => x[0] === id), pack = r[1], t = r[2] + ((opt && opt.dt) || 0);
+    const M = await __meshT(pack, t, opt); __MN[id] = M;
+    const b = document.createElement('canvas'); b.width = 320; b.height = 180; __meshDrawN(b, M, (opt && opt.blur) || blurFrac || 0.035);
+    __cell(o, await __frame(pack, t, 320, 180), id); __cell(o, b, 'K' + M.pal.length + ' e' + M.fitErr + ' h' + M.holes);
+  }
+  return list.length;
+};
+/* mesh entries (without the debug mask) as JSON for saasbg_mesh.js */
+window.__meshJSON = function (ids, blur) {
+  const o = {};
+  for (const id of ids) { const M = __MN[id]; if (!M) continue; o[id] = { c: M.c, r: M.r, pal: M.pal, cells: M.cells }; if (blur && blur[id]) o[id].blur = blur[id]; }
+  return JSON.stringify(o);
+};
+/* reference frames as PNG files in out/sink/ref (for ref | AE comparison sheets) */
+window.__saveRefs = async function (ids) {
+  for (const id of ids) { const r = __REF.find(x => x[0] === id), c = await __frame(r[1], r[2], 640, 360); await __sink('ref_' + id + '.b64', c.toDataURL('image/png').split(',')[1]); }
+  return ids.length;
+};
+/* stale-frame check: mean colour difference between a mesh and a fresh low-res reference frame */
+window.__decode = function (M) {
+  const pal = M.pal.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]), o = [];
+  for (let i = 0; i < M.c * M.r; i++) { const s = M.cells.substr(i * 4, 4), a = pal[+s[0]], b = pal[+s[1]], t = +s.substr(2) / 99; o.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+  return o;
+};
+window.__verify = async function (files) {
+  const res = [];
+  for (const fn of files) {
+    const J = await (await fetch('/sink/' + fn)).json();
+    for (const id in J) {
+      const M = J[id], r = __REF.find(x => x[0] === id), fr = await __frame(r[1], r[2], M.c * 4, M.r * 4), d = fr.getContext('2d').getImageData(0, 0, M.c * 4, M.r * 4).data, D = __decode(M), diffs = [];
+      for (let y = 0; y < M.r; y++) for (let x = 0; x < M.c; x++) {
+        let s = [0, 0, 0]; for (let yy = 0; yy < 4; yy++) for (let xx = 0; xx < 4; xx++) { const k = ((y * 4 + yy) * M.c * 4 + x * 4 + xx) * 4; s[0] += d[k]; s[1] += d[k + 1]; s[2] += d[k + 2]; }
+        const q = D[y * M.c + x]; diffs.push((Math.abs(s[0] / 16 - q[0]) + Math.abs(s[1] / 16 - q[1]) + Math.abs(s[2] / 16 - q[2])) / 3);
+      }
+      diffs.sort((a, b) => a - b);
+      res.push([id, +diffs[Math.floor(diffs.length / 2)].toFixed(1)]);   // median: text cells do not count
+    }
+  }
+  return res;
+};
+/* background runners (the pane may be hidden, so long jobs run detached and report through __ST) */
+window.__ALL = UK_CAT.saasBg.filter(x => x.mesh).map(x => x.id);
+window.__OPT = { sb063: { holes: [[0, 7, 31, 10]] }, sb077: { holes: [[10, 6, 31, 10]], ghost: 30 }, sb097: { holes: [[3, 2, 28, 17]] }, sb113: { holes: [[7, 0, 25, 16]] }, sb127: { holes: [[8, 10, 24, 17]] },
+  sb070: { holes: [[13, 5, 20, 10]] }, sb086: { holes: [[8, 6, 23, 13]] }, sb098: { holes: [[4, 3, 27, 14]] }, sb107: { holes: [[9, 1, 22, 16]] }, sb047: { thr: 12, dl: 6 } };
+Object.assign(__OPT, { sb113: { holes: [[6, 0, 28, 17]], ghost: 8 } });
+(function () { const Wt = { white: true, ghost: 0, dl: 3, offs: [0], C: 96, R: 54, S: 5 }, W48 = { white: true, ghost: 0, dl: 3, offs: [0] }; Object.assign(__OPT, { sb055: Wt, sb057: Wt, sb058: Wt, sb059: { white: 150, wsat: 90, ghost: 0, dl: 3, offs: [0], holes: [[5, 7, 26, 10]], C: 96, R: 54, S: 5 }, sb060: Wt, sb061: Wt, sb062: Wt, sb064: Wt, sb035: { noText: true, ghost: 0, offs: [0] }, sb048: W48 }); })();
+/* shape looks redone as crisp 96 x 54 meshes: no auto text detection (neon edges would count as text), titles masked by hand */
+(function () {
+  const H = (holes) => ({ C: 96, R: 54, S: 5, noText: true, ghost: 0, offs: [0], holes: holes });
+  Object.assign(__OPT, {
+    sb030: H([[8, 7, 24, 10]]), sb031: H([[6, 13, 25, 14]]), sb032: H([[11, 6, 20, 11]]), sb033: H([[9, 2, 22, 4], [12, 12, 19, 14]]),
+    sb034: H([[6, 8, 25, 9]]), sb036: H([[8, 7, 23, 10], [0, 15, 2, 17], [24, 0, 31, 1]]), sb037: H([[9, 8, 22, 9], [0, 15, 2, 17], [24, 0, 31, 1]]),
+    sb038: H([[8, 7, 23, 10], [0, 15, 2, 17], [24, 0, 31, 1]]), sb039: H([[4, 5, 27, 12], [0, 15, 2, 17], [24, 0, 31, 1]]), sb042: H([[4, 4, 27, 13], [0, 15, 2, 17], [24, 0, 31, 1]]),
+    sb056: H([[7, 9, 24, 16]]), sb069: H([[11, 8, 27, 10]]), sb072: H([[8, 5, 23, 8], [13, 9, 16, 11], [23, 10, 25, 12]]), sb088: H([[6, 5, 25, 16]]), sb131: H([[7, 8, 24, 10]]),
+    sb091: { holes: [[12, 5, 19, 17], [9, 2, 22, 3]] }, sb092: {}, sb124: { holes: [[4, 13, 27, 16]] },
+    sb093: { smooth: 1, passes: 3 }, sb097: { holes: [[3, 2, 28, 17]], smooth: 1, passes: 3 }, sb100: { smooth: 1, passes: 3 }, sb112: { smooth: 1, passes: 3 }, sb118: { smooth: 1, passes: 3 }, sb119: { smooth: 1, passes: 3 }, sb120: { smooth: 1, passes: 3 }, sb126: { noText: true, ghost: 0, smooth: 1, passes: 4 }, sb067: { smooth: 1, passes: 2 },
+    sb047: { thr: 12, dl: 6, holes: [[10, 3, 21, 15], [21, 0, 26, 7], [2, 9, 9, 15], [3, 3, 7, 7], [20, 13, 25, 17]] }
+  });
+  window.__NEW = ['sb030','sb031','sb032','sb033','sb034','sb036','sb037','sb038','sb039','sb042','sb056','sb069','sb072','sb088','sb131','sb091','sb092','sb124'];
+})();window.__run = function (name, ids) { window.__ST = 'run ' + name; (async () => { try { await __reviewQ(ids.map(i => __OPT[i] ? [i, __OPT[i]] : i)); await __sink(name, __meshJSON(ids)); __ST = 'done ' + name + ' ' + ids.map(i => i + ':' + __MN[i].fitErr + '/' + __MN[i].holes + '/f' + __MN[i].nf).join(' '); } catch (e) { __ST = 'err ' + e; } })(); return __ST; };
+window.__runT = function (ids) { window.__ST = 'run'; (async () => { try { await __reviewT(ids.map(i => __OPT[i] ? [i, __OPT[i]] : i)); __ST = 'done'; } catch (e) { __ST = 'err ' + e; } })(); return __ST; };
+window.__runC = function (ids, cols, t) { window.__ST = 'run'; (async () => { try { await __cmp(ids, cols, t); __ST = 'done'; } catch (e) { __ST = 'err ' + e; } })(); return __ST; };
+window.__runR = function (ids, cols, dt) { window.__ST = 'run'; (async () => { try { await __refList(ids, cols, dt); __ST = 'done'; } catch (e) { __ST = 'err ' + e; } })(); return __ST; };
+document.title = 'mesh lab ready ' + __REF.length;
+</script></body></html>

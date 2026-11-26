@@ -1,0 +1,112 @@
+#!/bin/bash
+# Ultimate Kit - macOS installer app. Asks Install / Uninstall in a window, copies the panel (Contents/Resources/
+# com.ultimatekit.panel) into the user's Adobe CEP extensions folder and lets After Effects load it (CEP
+# "PlayerDebugMode", needed for panels that are not installed through Adobe Exchange). No admin password needed.
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8     # Georgian text in the windows
+APP="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${UK_SRC:-$APP/Resources/com.ultimatekit.panel}"      # (Install.command passes the plugin folder of the zip)
+ICON="${UK_ICON:-$APP/Resources/AppIcon.icns}"
+DEST_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
+DEST="$DEST_DIR/com.ultimatekit.panel"
+LOG="$HOME/Library/Logs/Ultimate Kit Installer.log"
+log() { mkdir -p "$HOME/Library/Logs" 2>/dev/null; echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG" 2>/dev/null; }
+
+# a window with buttons; prints the button pressed ("Cancel" when cancelled). Fails when no window could be shown
+dialog() {   # text, buttons (AppleScript list), default button
+    osascript \
+        -e 'on run argv' \
+        -e 'set msg to item 1 of argv' \
+        -e 'set ic to item 2 of argv' \
+        -e 'activate' \
+        -e 'try' \
+        -e "set r to display dialog msg with title \"Ultimate Kit\" buttons $2 default button \"$3\" cancel button \"Cancel\" with icon ((POSIX file ic) as alias)" \
+        -e 'on error number n' \
+        -e 'if n is -128 then return "Cancel"' \
+        -e 'try' \
+        -e "set r to display dialog msg with title \"Ultimate Kit\" buttons $2 default button \"$3\" cancel button \"Cancel\" with icon note" \
+        -e 'on error' \
+        -e 'return "Cancel"' \
+        -e 'end try' \
+        -e 'end try' \
+        -e 'return button returned of r' \
+        -e 'end run' "$1" "$ICON" 2>>"$LOG"
+}
+message() {  # text
+    echo "$1"
+    osascript \
+        -e 'on run argv' \
+        -e 'set msg to item 1 of argv' \
+        -e 'set ic to item 2 of argv' \
+        -e 'activate' \
+        -e 'try' \
+        -e 'display dialog msg with title "Ultimate Kit" buttons {"OK"} default button "OK" with icon ((POSIX file ic) as alias)' \
+        -e 'on error' \
+        -e 'display dialog msg with title "Ultimate Kit" buttons {"OK"} default button "OK" with icon note' \
+        -e 'end try' \
+        -e 'end run' "$1" "$ICON" >/dev/null 2>>"$LOG"
+}
+ae_running() { pgrep -fi "Adobe After Effects" >/dev/null 2>&1; }
+
+log "start: $(sw_vers -productVersion 2>/dev/null) $(uname -m), from $APP"
+
+if [ ! -f "$SRC/CSXS/manifest.xml" ]; then
+    log "the plugin files are missing in the app"
+    message "ინსტალერში პლაგინის ფაილები ვერ მოიძებნა. ჩამოტვირთე თავიდან."
+    exit 1
+fi
+
+if [ -d "$DEST" ]; then
+    CHOICE=$(dialog "Ultimate Kit უკვე დაინსტალირებულია.
+
+Install - თავიდან ჩაწერა (განახლება)
+Uninstall - წაშლა" '{"Uninstall", "Cancel", "Install"}' "Install")
+else
+    CHOICE=$(dialog "Ultimate Kit - After Effects-ის პლაგინი
+
+დააჭირე Install-ს და პლაგინი ჩაიწერება." '{"Cancel", "Install"}' "Install")
+fi
+# (no window could be shown at all: the install still happens, that is why this app was opened)
+[ -z "$CHOICE" ] && { log "no window, installing anyway"; CHOICE="Install"; }
+log "choice: $CHOICE"
+
+case "$CHOICE" in
+Install)
+    mkdir -p "$DEST_DIR" && rm -rf "$DEST" && ditto "$SRC" "$DEST"
+    if [ $? -ne 0 ] || [ ! -f "$DEST/CSXS/manifest.xml" ]; then
+        log "copy failed to $DEST_DIR"
+        message "ინსტალაცია ვერ მოხერხდა, ფაილები ვერ ჩაიწერა აქ:
+$DEST_DIR"
+        exit 1
+    fi
+    xattr -dr com.apple.quarantine "$DEST" 2>/dev/null
+    chmod -R u+rwX "$DEST" 2>/dev/null
+    for v in 9 10 11 12 13 14 15 16; do defaults write "com.adobe.CSXS.$v" PlayerDebugMode 1; done
+    log "installed to $DEST"
+    NEXT="Window > Extensions > Ultimate Kit
+
+ერთხელ ჩართე After Effects-ში:
+Settings > Scripting & Expressions > Allow Scripts to Write Files and Access Network"
+    if ae_running; then
+        message "Ultimate Kit დაინსტალირდა!
+
+დახურე და თავიდან გახსენი After Effects, შემდეგ:
+$NEXT"
+    else
+        message "Ultimate Kit დაინსტალირდა!
+
+გახსენი After Effects, შემდეგ:
+$NEXT"
+    fi
+    ;;
+Uninstall)
+    rm -rf "$DEST"
+    log "uninstalled"
+    message "Ultimate Kit წაიშალა.
+
+თუ After Effects ღიაა, გადატვირთე."
+    ;;
+*)
+    exit 0
+    ;;
+esac
+exit 0

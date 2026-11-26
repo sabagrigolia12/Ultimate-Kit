@@ -1,0 +1,1 @@
+﻿$.global.BURST_COUNT = -1; $.global.BURST_W = 1080; $.global.BURST_H = 1920; $.evalFile(new File("D:/Projects/Codex/tools/ae-test/t_burst.jsx")); $.global.BURST_COUNT = 0; $.global.BURST_W = 0; $.global.BURST_H = 0;

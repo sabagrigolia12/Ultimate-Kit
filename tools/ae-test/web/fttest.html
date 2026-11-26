@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>fill trim test</title>
+<style>body{background:#111;color:#ccc;font:12px sans-serif;margin:8px}</style></head>
+<body><div id="s"></div>
+<script src="/uk/shared/pathsimp.js"></script>
+<script src="/uk/js/trace.js"></script>
+<script src="/uk/js/filltrim.js"></script>
+<script>
+// Fill Trim tests: the user's PNG (copied next to this page) traced as the panel does, its islands, frames of the reveal saved to out/hlref.
+var ISL = null, FILLS = null, IM = null;
+window.setup = async function (url, from) {
+    IM = new Image(); IM.src = url; await IM.decode();
+    var R = UKTrace.prepare(IM), res = UKTrace.run(R, { colors: 0, tol: 0.48, smooth: 2.5, corner: 35, minArea: 4, mode: "separate" });
+    FILLS = res.colors; ISL = UKFillTrim.islands(FILLS);
+    var t0 = performance.now(), chars = 0, nodes = 0, pts = 0;
+    ISL.forEach(function (x) { x.d = UKFillTrim.build(x, { from: from || "left" }); chars += JSON.stringify(x.d).length; nodes += x.d.nodes; pts += x.d.pts; });
+    return JSON.stringify({ colours: FILLS.length, islands: ISL.length, holes: ISL.reduce(function (a, b) { return a + b.holes.length; }, 0), ms: Math.round(performance.now() - t0), dataChars: chars, nodes: nodes, pts: pts });
+};
+function pathsOf(x, k, ox, oy) {
+    var P = new Path2D(), X = function (v) { return (v - ox) * k; }, Y = function (v) { return (v - oy) * k; };
+    x.paths.forEach(function (p) { var n = p.v.length; P.moveTo(X(p.v[0][0]), Y(p.v[0][1])); for (var j = 0; j < n; j++) { var j1 = (j + 1) % n; P.bezierCurveTo(X(p.v[j][0] + p.o[j][0]), Y(p.v[j][1] + p.o[j][1]), X(p.v[j1][0] + p.i[j1][0]), Y(p.v[j1][1] + p.i[j1][1]), X(p.v[j1][0]), Y(p.v[j1][1])); } P.closePath(); });
+    return P;
+}
+function maskOf(x, lo, hi, k, ox, oy) { var pts = UKFillTrim.polygon(x.d, lo, hi), P = new Path2D(); pts.forEach(function (q, i) { if (i) P.lineTo((q[0] - ox) * k, (q[1] - oy) * k); else P.moveTo((q[0] - ox) * k, (q[1] - oy) * k); }); P.closePath(); return P; }
+function drawAt(g, lo, hi, k, ox, oy, rev, outline) {
+    ISL.forEach(function (x) {
+        g.save(); var a = lo, b = hi; if (rev) { a = 1 - hi; b = 1 - lo; }
+        var M = maskOf(x, a, b, k, ox, oy); g.clip(M, "nonzero"); g.fillStyle = x.hex; g.fill(pathsOf(x, k, ox, oy), "evenodd"); g.restore();
+        if (outline) { g.strokeStyle = "rgba(255,60,90,0.8)"; g.lineWidth = 1; g.stroke(M); }
+    });
+}
+window.sheet = async function (file, us, k, crop, cols, opt) {
+    opt = opt || {}; cols = cols || 2;
+    var c = crop, W = Math.round(c[2] * k), H = Math.round(c[3] * k), rows = Math.ceil(us.length / cols), sh = document.createElement("canvas"); sh.width = (W + 6) * cols; sh.height = (H + 6) * rows;
+    var g = sh.getContext("2d"); g.fillStyle = "#333"; g.fillRect(0, 0, sh.width, sh.height);
+    us.forEach(function (u, i) {
+        var lo = u instanceof Array ? u[0] : 0, hi = u instanceof Array ? u[1] : u, x0 = (i % cols) * (W + 6), y0 = Math.floor(i / cols) * (H + 6);
+        g.save(); g.translate(x0, y0); g.beginPath(); g.rect(0, 0, W, H); g.clip(); g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+        drawAt(g, lo, hi, k, c[0], c[1], opt.rev, opt.outline);
+        g.fillStyle = "#ff0"; g.font = "13px sans-serif"; g.fillText(lo + ".." + hi, 6, 15); g.restore();
+    });
+    await fetch("/save/" + file + ".jpg", { method: "POST", body: sh.toDataURL("image/jpeg", 0.9) });
+    return "saved";
+};
+window.saveJson = async function (name, o) { await fetch("/save/" + name + ".json", { method: "POST", body: "data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(o)))) }); return "saved"; };
+document.getElementById("s").textContent = "ready";
+</script></body></html>

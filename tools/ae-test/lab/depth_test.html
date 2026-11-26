@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Depth test</title></head>
+<body style="background:#222;color:#ddd;font:12px sans-serif">
+<div id="log">start</div>
+<script src="/uk/lib/depth/ort.wasm.min.js"></script>
+<script src="/uk/js/depth.js"></script>
+<script>
+var log = function (s) { document.getElementById("log").textContent += " | " + s; };
+var models = (new URLSearchParams(location.search).get("m") || "depth_anything_v2_small_q8.onnx,depth_anything_v2_small_fp32.onnx").split(",");
+var img = new Image();
+img.onload = function () {
+    var chain = Promise.resolve();
+    models.forEach(function (m, i) {
+        chain = chain.then(function () {
+            var t0 = performance.now();
+            return UKDepth.load("/uk/", m).then(function () {
+                var t1 = performance.now();
+                return UKDepth.estimate(img, { root: "/uk/", eq: Number(new URLSearchParams(location.search).get("eq") || 0.6) }).then(function (c) {
+                    log(m + " load " + Math.round(t1 - t0) + "ms depth " + Math.round(performance.now() - t1) + "ms");
+                    return fetch("/depth_" + i + ".txt", { method: "POST", body: c.toDataURL("image/png").split(",")[1] });
+                });
+            });
+        });
+    });
+    chain.then(function () { window.DONE = "ok"; }, function (e) { log("ERR " + (e && e.message)); window.DONE = "err"; });
+};
+img.src = "/lab/" + (new URLSearchParams(location.search).get("img") || "land.png");
+</script></body></html>

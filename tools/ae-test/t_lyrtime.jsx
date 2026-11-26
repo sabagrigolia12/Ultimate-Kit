@@ -1,0 +1,2 @@
+// READ ONLY: timing of "Comp 1" layers.
+var c=null;for(var k=1;k<=app.project.numItems;k++)if(app.project.item(k).name=="Comp 1")c=app.project.item(k);var o=new File("D:/Projects/Codex/tools/ae-test/out/lyrtime.txt");o.open("w");o.writeln("comp "+c.name+" dur "+c.duration+" fps "+c.frameRate);for(var i=1;i<=c.numLayers;i++){var L=c.layer(i);o.writeln(L.name+" start "+L.startTime+" in "+L.inPoint+" out "+L.outPoint+" stretch "+L.stretch+" remap "+L.timeRemapEnabled);}o.close();

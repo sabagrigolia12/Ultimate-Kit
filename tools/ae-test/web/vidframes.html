@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>frames</title>
+<style>body{background:#111;color:#ddd;font:13px sans-serif}</style></head>
+<body><div id="s">loading</div>
+<script>
+// Reads /video.mp4 frame by frame: window.grab(step, width) saves every <step> s as out/hlref/fNNNN.jpg and
+// contact sheets sheet_N.jpg (6 x 5 thumbnails with their times); window.info has duration / size.
+var v = document.createElement("video"); v.muted = true; document.body.appendChild(v); v.style.width = "320px";
+var info = window.info = {};
+fetch("/video.mp4").then(function (r) { return r.blob(); }).then(function (b) {
+    v.src = URL.createObjectURL(b);
+    v.onloadedmetadata = function () { info.dur = v.duration; info.w = v.videoWidth; info.h = v.videoHeight; document.getElementById("s").textContent = JSON.stringify(info); };
+});
+function seek(t) { return new Promise(function (res) { v.onseeked = function () { setTimeout(res, 30); }; v.currentTime = t; }); }
+function save(name, cv, q) { return fetch("/save/" + name, { method: "POST", body: cv.toDataURL("image/jpeg", q || 0.85) }); }
+window.grab = async function (step, width, t0, t1) {
+    var W = width || 540, H = Math.round(W * info.h / info.w), cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var g = cv.getContext("2d"), tw = 300, th = Math.round(tw * info.h / info.w), cols = 6, rows = 5, per = cols * rows;
+    var sh = document.createElement("canvas"); sh.width = tw * cols; sh.height = (th + 18) * rows; var sg = sh.getContext("2d");
+    var n = 0, sheet = 0, a = t0 || 0, b = Math.min(t1 || info.dur, info.dur - 0.01);
+    for (var t = a; t <= b; t += step) {
+        await seek(t);
+        g.drawImage(v, 0, 0, W, H);
+        await save("f" + String(n).padStart(4, "0") + ".jpg", cv);
+        var k = n % per; if (k === 0) { sg.fillStyle = "#000"; sg.fillRect(0, 0, sh.width, sh.height); }
+        sg.drawImage(v, (k % cols) * tw, Math.floor(k / cols) * (th + 18), tw, th);
+        sg.fillStyle = "#ff0"; sg.font = "13px sans-serif"; sg.fillText(n + "  " + t.toFixed(2) + "s", (k % cols) * tw + 4, Math.floor(k / cols) * (th + 18) + th + 14);
+        n++;
+        if (n % per === 0) { await save("sheet_" + sheet + ".jpg", sh, 0.8); sheet++; }
+    }
+    if (n % per) await save("sheet_" + sheet + ".jpg", sh, 0.8);
+    return n + " frames, " + (sheet + (n % per ? 1 : 0)) + " sheets";
+};
+</script></body></html>

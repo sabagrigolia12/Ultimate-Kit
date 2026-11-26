@@ -1,0 +1,1 @@
+﻿var p = app.project; var f = new File('D:/Projects/Codex/tools/ae-test/out/whatopen.txt'); f.open('w'); f.write('file=' + (p.file ? p.file.fsName : 'none') + ' dirty=' + p.dirty + ' items=' + p.numItems); f.close();

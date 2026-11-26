@@ -1,0 +1,17 @@
+# built packages (rebuilt with tools/build_mac.py)
+export/
+# test renders, dumps and logs (tens of GB over time)
+tools/ae-test/out/
+# large reference / result images of the labs
+tools/ae-test/lab/*.png
+tools/ae-test/lab/*.jpg
+tools/ae-test/lab/*.mp4
+# the panel's debug-port file, OS and editor clutter
+.debug
+Thumbs.db
+desktop.ini
+.DS_Store
+__pycache__/
+*.pyc
+# local Claude Code permissions
+.claude/settings.local.json
