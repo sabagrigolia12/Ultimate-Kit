@@ -14,7 +14,12 @@ var UKAutoCap = (function () {
     /* ------------------------------------------------------------ styles */
     var BASE = { maxWords: 0, maxChars: 0, punct: false, size: 6, posY: 0, color: "#FFFFFF", entrance: "none", shadow: false,
         hl: false, hlColor: "#FFD60A", scale: 100, upcoming: 100, wbox: false, wboxColor: "#7C5CFF", wboxOp: 100, wboxRound: 35,
-        box: false, boxColor: "#000000", boxOp: 50, boxRound: 40 };
+        box: false, boxColor: "#000000", boxOp: 50, boxRound: 40, posX: 0,
+        /* Character (After Effects' Character panel): font = PostScript name ("" = one that fits the language), fontFam /
+           fontStyle for the preview, leading 0 = Auto, tracking 1/1000 em, scales %, tsume %, caps none|all|small,
+           script none|super|sub, just left|center|right */
+        font: "", fontFam: "", fontStyle: "", leading: 0, kern: "metrics", tracking: 0, stroke: false, strokeColor: "#000000", strokeW: 0,
+        strokeOver: false, vScale: 100, hScale: 100, baseline: 0, tsume: 0, fauxBold: false, fauxItalic: false, caps: "none", script: "none", just: "center" };
     var KEYS = Object.keys(BASE);
     function style(o) { var r = {}, k; for (k in BASE) r[k] = BASE[k]; if (o) for (k in o) if (k in BASE) r[k] = o[k]; return r; }
     var PRESETS = [
@@ -31,7 +36,7 @@ var UKAutoCap = (function () {
         var W = (comp && comp.w) || 1920, H = (comp && comp.h) || 1080, vert = H > W * 1.05, fs = Math.min(W, H) * (Number(o.size) || 6) / 100;
         var fit = Math.max(6, Math.floor(W * (vert ? 0.84 : 0.72) / (fs * 0.6)));
         return { W: W, H: H, vert: vert, fs: fs, maxChars: o.maxChars > 0 ? Number(o.maxChars) : fit, maxWords: o.maxWords > 0 ? Number(o.maxWords) : (vert ? 4 : 7),
-            posY: o.posY > 0 ? Number(o.posY) : (vert ? 70 : 85) };
+            posY: o.posY > 0 ? Number(o.posY) : (vert ? 70 : 85), posX: o.posX > 0 ? Number(o.posX) : 50 };
     }
 
     /* ------------------------------------------------------------ transcription */
@@ -209,24 +214,45 @@ var UKAutoCap = (function () {
             if (!b) return;
         }
         var fs = (o.thumb ? Math.min(H * 0.17, L.fs * k * 2.2) : L.fs * k), items = [], kk;
-        for (kk = b.i0; kk < b.i1; kk++) { items.push({ s: o.punct === false ? strip(show(words[kk])) : show(words[kk]), k: kk }); if (!o.thumb && tt >= words[kk].s) act = kk; }
-        g.font = "700 " + fs + "px 'Segoe UI', 'Noto Sans Georgian', Montserrat, Arial, sans-serif"; g.textBaseline = "alphabetic";
-        var sp = g.measureText(" ").width, tw = 0;
-        items.forEach(function (x, q) { x.w = g.measureText(x.s).width; tw += x.w + (q ? sp : 0); });
-        if (o.thumb && tw > W * 0.9) { var sc = W * 0.9 / tw; fs *= sc; sp *= sc; tw *= sc; g.font = "700 " + fs + "px 'Segoe UI', 'Noto Sans Georgian', Montserrat, Arial, sans-serif"; items.forEach(function (x) { x.w *= sc; }); }
-        var cy = o.thumb ? H * 0.5 : H * L.posY / 100, y = cy + fs * 0.34, x = W / 2 - tw / 2;
+        /* the Character settings, as near as a browser can show them */
+        var fst = String(o.fontStyle || ""), weight = o.fontFam ? 400 : 700;
+        if (/black|heavy/i.test(fst)) weight = 900; else if (/extra ?bold|ultra ?bold/i.test(fst)) weight = 800; else if (/semi ?bold|demi/i.test(fst)) weight = 600;
+        else if (/bold/i.test(fst)) weight = 700; else if (/medium/i.test(fst)) weight = 500; else if (/light|thin/i.test(fst)) weight = 300;
+        if (o.fauxBold && weight < 700) weight = 700;
+        var ital = /italic|oblique/i.test(fst) || o.fauxItalic, fam = (o.fontFam ? "'" + o.fontFam + "', " : "") + "'Segoe UI', 'Noto Sans Georgian', Montserrat, Arial, sans-serif";
+        var hs = (o.hScale || 100) / 100, vs = (o.vScale || 100) / 100, small = o.caps === "small" ? 0.8 : 1, sup = (o.script === "super" || o.script === "sub") ? 0.6 : 1;
+        var setFont = function () {
+            g.font = (ital ? "italic " : "") + weight + " " + (fs * small * sup).toFixed(2) + "px " + fam;
+            if ("letterSpacing" in g) g.letterSpacing = ((Number(o.tracking) || 0) / 1000 * fs) + "px";
+        };
+        var cap = function (s) { return (o.caps === "all" || o.caps === "small") ? s.toUpperCase() : s; };
+        for (kk = b.i0; kk < b.i1; kk++) { items.push({ s: cap(o.punct === false ? strip(show(words[kk])) : show(words[kk])), k: kk }); if (!o.thumb && tt >= words[kk].s) act = kk; }
+        g.textBaseline = "alphabetic"; setFont();
+        var sp = g.measureText(" ").width * hs, tw = 0;
+        items.forEach(function (x, q) { x.w = g.measureText(x.s).width * hs; tw += x.w + (q ? sp : 0); });
+        if (o.thumb && tw > W * 0.9) { var sc = W * 0.9 / tw; fs *= sc; sp *= sc; tw *= sc; setFont(); items.forEach(function (x) { x.w *= sc; }); }
+        var ax = o.thumb ? W / 2 : W * L.posX / 100, x = ax - tw / 2;
+        if (!o.thumb && o.just === "left") x = ax; else if (!o.thumb && o.just === "right") x = ax - tw;
+        var cy = o.thumb ? H * 0.5 : H * L.posY / 100, x0 = x;
+        var shift = ((Number(o.baseline) || 0) * k) + (o.script === "super" ? fs * 0.33 : (o.script === "sub" ? -fs * 0.15 : 0));
+        var stroke = o.stroke && Number(o.strokeW) > 0, lw = (Number(o.strokeW) || 0) * (o.thumb ? fs / Math.max(1, L.fs) : k);
         if (o.box) {
-            var padX = fs * 0.45, padY = fs * 0.3, bh = fs + 2 * padY;
-            g.fillStyle = rgba(o.boxColor, (o.boxOp === undefined ? 50 : o.boxOp) / 100); rr(g, W / 2 - tw / 2 - padX, cy - bh / 2, tw + 2 * padX, bh, bh / 2 * (o.boxRound || 0) / 100); g.fill();
+            var padX = fs * 0.45, padY = fs * 0.3, bh = fs * vs + 2 * padY;
+            g.fillStyle = rgba(o.boxColor, (o.boxOp === undefined ? 50 : o.boxOp) / 100); rr(g, x0 - padX, cy - bh / 2, tw + 2 * padX, bh, bh / 2 * (o.boxRound || 0) / 100); g.fill();
         }
         items.forEach(function (it) {
-            var on = it.k === act, wh = fs * 1.16, wx = fs * 0.2;
+            var on = it.k === act, wh = fs * vs * 1.16, wx = fs * 0.2;
             if (on && o.wbox) { g.fillStyle = rgba(o.wboxColor, (o.wboxOp === undefined ? 100 : o.wboxOp) / 100); rr(g, x - wx, cy - wh / 2, it.w + 2 * wx, wh, wh / 2 * (o.wboxRound || 0) / 100); g.fill(); }
             g.globalAlpha = (it.k > act && act >= 0) ? (o.upcoming === undefined ? 100 : o.upcoming) / 100 : 1;
             if (o.shadow) { g.shadowColor = "rgba(0,0,0,0.6)"; g.shadowBlur = fs * 0.15; g.shadowOffsetX = fs * 0.035; g.shadowOffsetY = fs * 0.035; }
-            g.fillStyle = (on && o.hl) ? o.hlColor : (o.color || "#FFFFFF");
             var sc2 = on ? (o.scale || 100) / 100 : 1;
-            if (sc2 !== 1) { g.save(); g.translate(x + it.w / 2, cy); g.scale(sc2, sc2); g.fillText(it.s, -it.w / 2, fs * 0.34); g.restore(); } else g.fillText(it.s, x, y);
+            g.save(); g.translate(x + it.w / 2, cy); g.scale(sc2, sc2); g.translate(-it.w / 2, fs * 0.34 * vs - shift); g.scale(hs, vs);
+            g.fillStyle = (on && o.hl) ? o.hlColor : (o.color || "#FFFFFF");
+            if (stroke) { g.strokeStyle = o.strokeColor || "#000000"; g.lineWidth = lw; g.lineJoin = "round"; }
+            if (stroke && !o.strokeOver) g.strokeText(it.s, 0, 0);
+            g.fillText(it.s, 0, 0);
+            if (stroke && o.strokeOver) { g.shadowColor = "transparent"; g.strokeText(it.s, 0, 0); }
+            g.restore();
             g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetX = 0; g.shadowOffsetY = 0; g.globalAlpha = 1;
             x += it.w + sp;
         });

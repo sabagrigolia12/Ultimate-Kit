@@ -2168,6 +2168,79 @@
             var t = grid.querySelector('[data-id="' + p.id + '"]');
             if (t) { t.classList.add("dirty"); var c = t.querySelector("canvas"); try { var o = styleOf(p); o.thumb = true; A.draw(c, 0, o); } catch (e4) { } }
         };
+        /* ---- Character (like After Effects' own Character panel): font family + style, size, leading, kerning,
+           tracking, fill + stroke, scales, baseline shift, tsume, faux bold / italic, caps, super / subscript, alignment */
+        var fonts = null;
+        var loadFonts = function () {
+            if (fonts) return Promise.resolve(fonts);
+            if (!CEP) { fonts = [{ f: "Arial", s: [["Regular", "ArialMT"], ["Bold", "Arial-BoldMT"]] }, { f: "Montserrat", s: [["SemiBold", "Montserrat-SemiBold"], ["ExtraBold", "Montserrat-ExtraBold"]] }, { f: "Segoe UI", s: [["Regular", "SegoeUI"], ["Bold", "SegoeUI-Bold"]] }]; return Promise.resolve(fonts); }
+            return call("acFonts", {}).then(function (r) { fonts = (r.ok && r.data && r.data.fonts) || []; return fonts; });
+        };
+        var famOf = function (ps) { for (var i = 0; fonts && i < fonts.length; i++) for (var k = 0; k < fonts[i].s.length; k++) if (fonts[i].s[k][1] === ps) return [fonts[i], fonts[i].s[k][0]]; return null; };
+        var num = function (v, step, w, onCh) { var i = h("input", { type: "number", value: v, step: step || 1, style: "max-width:" + (w || 70) + "px" }); i.addEventListener("change", function () { onCh(Number(i.value) || 0); }); return i; };
+        var characterCard = function (s) {
+            var shortSide = function () { var c = st.comp || { w: 1920, h: 1080 }; return Math.min(c.w, c.h); };
+            var fam = h("select", {}), sty = h("select", {});
+            var fillFam = function () {
+                fam.innerHTML = ""; fam.appendChild(h("option", { value: "", text: "Auto (fits the language)" }));
+                (fonts || []).forEach(function (f) { fam.appendChild(h("option", { value: f.f, text: f.f })); });
+                var cur = s.font ? famOf(s.font) : null;
+                fam.value = cur ? cur[0].f : "";
+                fillSty(cur ? cur[0] : null, cur ? cur[1] : "");
+            };
+            var fillSty = function (f, styleName) {
+                sty.innerHTML = "";
+                if (!f) { sty.appendChild(h("option", { value: "", text: "-" })); sty.disabled = true; return; }
+                sty.disabled = false;
+                f.s.forEach(function (x) { sty.appendChild(h("option", { value: x[1], text: x[0] })); });
+                var pick = f.s.filter(function (x) { return x[0] === styleName; })[0] || f.s.filter(function (x) { return /^(Regular|Bold)$/i.test(x[0]); })[0] || f.s[0];
+                sty.value = pick[1];
+            };
+            var setFont = function () {
+                var f = (fonts || []).filter(function (x) { return x.f === fam.value; })[0];
+                if (!f) { edit("font", ""); edit("fontFam", ""); edit("fontStyle", ""); return; }
+                var x = f.s.filter(function (y) { return y[1] === sty.value; })[0] || f.s[0];
+                edit("font", x[1]); edit("fontFam", f.f); edit("fontStyle", x[0]);
+            };
+            fam.addEventListener("change", function () { var f = (fonts || []).filter(function (x) { return x.f === fam.value; })[0]; fillSty(f, ""); setFont(); });
+            sty.addEventListener("change", setFont);
+            loadFonts().then(fillFam);
+            var px = num(Math.round(shortSide() * s.size / 100), 1, 70, function (v) { edit("size", Math.max(1, v) / shortSide() * 100); });
+            var lead = num(s.leading || 0, 1, 70, function (v) { edit("leading", Math.max(0, v)); }); lead.title = "Leading (0 = Auto)";
+            var kern = h("select", { style: "max-width:110px" });
+            [["metrics", "Metrics"], ["optical", "Optical"], ["none", "0"]].forEach(function (o) { kern.appendChild(h("option", { value: o[0], text: o[1] })); });
+            kern.value = s.kern; kern.addEventListener("change", function () { edit("kern", kern.value); });
+            var trk = num(s.tracking, 10, 70, function (v) { edit("tracking", v); });
+            var sw = num(s.strokeW, 0.5, 60, function (v) { edit("strokeW", Math.max(0, v)); edit("stroke", v > 0); });
+            var ord = h("select", { style: "max-width:130px" });
+            [["0", "Fill over stroke"], ["1", "Stroke over fill"]].forEach(function (o) { ord.appendChild(h("option", { value: o[0], text: o[1] })); });
+            ord.value = s.strokeOver ? "1" : "0"; ord.addEventListener("change", function () { edit("strokeOver", ord.value === "1"); });
+            var flag = function (key, text, title, val) {
+                var b = h("button", { class: "acflag" + ((val === undefined ? s[key] : s[key] === val) ? " on" : ""), text: text, title: title });
+                b.addEventListener("click", function () {
+                    if (val === undefined) { edit(key, !cs()[key]); b.classList.toggle("on"); return; }
+                    var now = cs()[key] === val ? "none" : val; edit(key, now);
+                    Array.prototype.forEach.call(b.parentNode.querySelectorAll('[data-k="' + key + '"]'), function (x) { x.classList.toggle("on", now === x.dataset.v); });
+                });
+                if (val !== undefined) { b.dataset.k = key; b.dataset.v = val; }
+                return b;
+            };
+            var flags = h("div", { class: "acflags" }, flag("fauxBold", "T", "Faux Bold"), flag("fauxItalic", "T", "Faux Italic"), flag("caps", "TT", "All Caps", "all"), flag("caps", "Tt", "Small Caps", "small"),
+                flag("script", "T¹", "Superscript", "super"), flag("script", "T₁", "Subscript", "sub"));
+            flags.children[0].style.fontWeight = "800"; flags.children[1].style.fontStyle = "italic";
+            var cell = function (label, el) { return h("label", { class: "accell" }, h("span", { text: label }), el); };
+            return section("Character", h("div", { class: "card" },
+                row("Font", fam),
+                row("Style", sty),
+                row("Size", h("div", { class: "row grow", style: "gap:8px;min-height:0" }, cell("px", px), cell("Leading", lead))),
+                row("Kerning", h("div", { class: "row grow", style: "gap:8px;min-height:0" }, kern, cell("Tracking", trk))),
+                row("Fill", swatch(s.color, function (v) { edit("color", v); }, "Fill colour")),
+                row("Stroke", h("div", { class: "row grow", style: "gap:8px;min-height:0" }, swatch(s.strokeColor, function (v) { edit("strokeColor", v); }, "Stroke colour"), cell("px", sw), ord)),
+                row("Scale", h("div", { class: "row grow", style: "gap:8px;min-height:0" }, cell("V %", num(s.vScale, 1, 60, function (v) { edit("vScale", v || 100); })), cell("H %", num(s.hScale, 1, 60, function (v) { edit("hScale", v || 100); })))),
+                row("Shift", h("div", { class: "row grow", style: "gap:8px;min-height:0" }, cell("Baseline", num(s.baseline, 1, 60, function (v) { edit("baseline", v); })), cell("Tsume %", num(s.tsume, 5, 60, function (v) { edit("tsume", Math.max(0, Math.min(100, v))); })))),
+                row(null, flags),
+                row("Align", seg([["left", "Left"], ["center", "Centre"], ["right", "Right"]], s.just, function (v) { edit("just", v); }))));
+        };
         var buildCtl = function () {
             var s = cs(), sl = function (key, min, max, step, unit, zero) { return slider(min, max, step, s[key], unit, function (v) { edit(key, v); }, zero); };
             var tg = function (key) { return toggle(s[key], function (v) { edit(key, v); }); };
@@ -2176,13 +2249,14 @@
             [["none", "No entrance"], ["fade", "Fade"], ["rise", "Rise"], ["pop", "Pop"], ["slide", "Slide"]].forEach(function (o) { ent.appendChild(h("option", { value: o[0], text: o[1] })); });
             ent.value = s.entrance; ent.addEventListener("change", function () { edit("entrance", ent.value); });
             ctl.innerHTML = "";
+            ctl.appendChild(characterCard(s));
             ctl.appendChild(section("Caption", h("div", { class: "card" },
                 row("Words", sl("maxWords", 0, 10, 1, "", "Auto")),
                 row("Line length", sl("maxChars", 0, 60, 1, "", "Auto")),
                 row("Punctuation", tg("punct")),
-                row("Size", sl("size", 3, 14, 0.5, "%")),
-                row("Position", sl("posY", 0, 95, 1, "%", "Auto")),
-                row("Text", pair(sw("color", "Text colour"), ent)),
+                row("Height", sl("posY", 0, 95, 1, "%", "Auto")),
+                row("Across", sl("posX", 0, 95, 1, "%", "Centre")),
+                row("Entrance", ent),
                 row("Shadow", tg("shadow")))));
             ctl.appendChild(section("Spoken word", h("div", { class: "card" },
                 row("Highlight", pair(sw("hlColor", "Colour of the spoken word"), tg("hl"))),
@@ -2213,7 +2287,7 @@
             var s = cs(), L = A.layout(s, st.comp), a = { blocks: A.blocks(st.words, s, st.comp), path: st.src ? encodeURIComponent(st.src.path || "") : "" };
             if (st.src) a.src = { start: st.src.start, stretch: st.src.stretch, inPoint: st.src.inPoint, outPoint: st.src.outPoint };
             A.KEYS.forEach(function (k) { a[k] = s[k]; });
-            a.maxChars = L.maxChars; a.posY = L.posY;
+            a.maxChars = L.maxChars; a.posY = L.posY; a.posX = L.posX;
             run("autoCaption", a, function (d) { return d.captions + " captions"; }, btnApply);
         };
     }

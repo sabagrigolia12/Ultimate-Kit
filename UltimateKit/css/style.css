@@ -247,3 +247,11 @@ input[type=password]:focus { border-color: var(--line-3); box-shadow: 0 0 0 3px 
 .acmenu button[disabled] { opacity: .35; pointer-events: none; }
 .acmenu button.danger { color: #ff8a8a; }
 .acname { width: 100%; height: 22px; margin-top: 4px; font-size: 11px; }
+
+/* auto captions: Character settings */
+.acflags { display: flex; gap: 4px; flex-wrap: wrap; }
+.acflag { min-width: 34px; height: 26px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg-deep); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.acflag:hover { color: var(--text); border-color: var(--line-3); }
+.acflag.on { background: var(--surface-3); color: var(--text); border-color: var(--line-3); box-shadow: inset 0 0 0 1px var(--line-2); }
+.accell { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.accell input[type=number] { width: 64px; }
