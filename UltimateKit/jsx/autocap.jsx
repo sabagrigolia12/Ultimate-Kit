@@ -151,7 +151,13 @@ UK.api.autoCaption = function (a) {
     }
     if (!blocks.length) throw new Error("No words fall inside the voice layer. Transcribe first.");
     return UK.atomic(comp, function () {
-        for (i = comp.numLayers; i >= 1; i--) if (comp.layer(i).comment === UK.AC.TAG) { comp.layer(i).locked = false; comp.layer(i).remove(); }
+        /* the previous rig goes, with the null's own solid when nothing else uses it (no "Null n" pile in the project) */
+        var olds = [];
+        for (i = comp.numLayers; i >= 1; i--) if (comp.layer(i).comment === UK.AC.TAG) {
+            try { if (comp.layer(i).nullLayer && comp.layer(i).source) olds.push(comp.layer(i).source); } catch (eN) { }
+            comp.layer(i).locked = false; comp.layer(i).remove();
+        }
+        for (i = 0; i < olds.length; i++) { try { if (olds[i].usedIn.length === 0) olds[i].remove(); } catch (eR) { } }
         var q = UK.AC.q, on = function (v, d) { return v === undefined ? d : !!v; }, num = function (v, d) { return (v === undefined || v === null || v === "") ? d : Number(v); };
         var fs = Math.max(6, Math.round(Math.min(comp.width, comp.height) * num(a.size, 6) / 100));
         var font = a.font || UK.AC.font(UK.AC.isGeo(all));
